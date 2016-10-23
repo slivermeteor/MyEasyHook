@@ -1,0 +1,81 @@
+EasyHook  RemoteHook 流程
+
+本流程理解 根据 http://easyhook.github.io/tutorials/nativeremotehook.html 和 EasyHook源码 
+
+简单流程:
+注入方调用的函数都是 RhInjectLibrary,
+
+	RhInjectLibrary(
+		ULONG InTargetPID,
+		ULONG InWakeUpTID,
+		ULONG InInjectionOptions,
+		WCHAR* InLibraryPath_x86,
+		WCHAR* InLibraryPath_x64,
+		PVOID InPassThruBuffer,
+        ULONG InPassThruSize)
+
+	关键参数 目标进程ID InTargetPID 两个InjectLibraryPath 注入选项 InInjectionOptions 
+	这个函数关键会从 目标进程位数对应的Dll里找到 NativeInjectionEntryPoint/_NativeInjectionEntryPoint@4 函数来执行注入
+	所以我们的注入DLL关键在于自己实现并且到处这个名字的函数
+	
+	所以注入想要完成的事，全部在Dll中的 NativeInjectionEntryPoint 实现。
+	
+	--- 详细理解RhInjectLibrary函数
+	RhInjectLibrary  			执行在自己的进程空间
+								主要负责:	1.检查参数传递的正确性 
+											2.构造RemoteInfo结构体
+											3.植入ASM-ShellCode
+											4.启动远程线程(三种方法)，执行ShellCode - 转入 HookCompleteInjection 函数
+								
+	HookCompleteInjection   	执行在目标进程空间
+								主要负责:   1.再次获得所需要的函数地址，以保证稳定性
+											2.设置了InjectDLlPath到环境变量中 - 避免全局变量的存在和反复传递Path
+											3. .NET   HOOK - CompleteManagedInjection
+											   WINAPI HOOK - CompleteUnmanagedInjection
+	CompleteUnmanagedInjection	执行在目标进程空间
+								主要负责:   1.构造REMOTE_ENTRY_INFO
+											2.调用Dll实现的 NativeInjectionEntryPoint/_NativeInjectionEntryPoint@4
+	
+	在 NativeInjectionEntryPoint 中如果要Hook一个函数 EasyHook 还提供了 LhInstallHook 
+								 LhInstallHook(
+									void* InEntryPoint,
+									void* InHookProc,
+									void* InCallback,
+									TRACED_HOOK_HANDLE OutHandle)
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	三个注入方法:
+	1. CreateRemoteThread 直接调用 - 没啥好讲的
+	2. NtCreatetThreadEx 从Ntdll里拔出来，再直接调用也没啥好讲的
+	3. RhCreateStealthRemoteThread - 根据函数介绍 我们将在目标进程里寻找一个线程 让它调用 CreateThread 帮我们启动一个远程线程执行
+									 我们的代码，但这个远程线程执行完毕后。被注入的线程再继续向下执行。这样注入过程就不会留下任何痕迹。
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+										
