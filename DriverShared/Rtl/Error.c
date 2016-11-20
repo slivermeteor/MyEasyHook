@@ -92,3 +92,12 @@ void RtlAssert(BOOL InAssert, LPCWSTR lpMessageText)
 }
 #endif
 
+EXTERN_C PWCHAR EASYHOOK_API RtlGetLastErrorString()
+{
+	return LastError;
+}
+
+EASYHOOK_NT_API RtlGetLastError()
+{
+	return LastErrorCode;
+}

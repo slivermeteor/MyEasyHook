@@ -6,6 +6,12 @@ typedef LONG(WINAPI* pfnNtCreateThreadEx)(PHANDLE ThreadHandle, ACCESS_MASK Desi
 										  HANDLE ProcessHandle, LPTHREAD_START_ROUTINE ThreadStart, LPVOID ThreadParameter,
 										  BOOL CreateSuspended, DWORD StackSize, LPVOID Unknown1, LPVOID Unknown2, LPVOID Unknown3);
 
+PVOID		GetRemoteProcAddress(ULONG32 ProcessID, HANDLE ProcessHandle, CHAR* strModuleName, CHAR* strFunctioName);
+HMODULE		GetRemoteModuleHandle(ULONG32 ProcessID, CHAR* strModuleName);
+ULONG		GetShellCodeSize();
+BYTE*		GetInjectionPtr();
+
+
 EASYHOOK_NT_API RhInjectLibrary(INT32 TargetProcessID, INT32 WakeUpThreadID, INT32 InjectionOptions,
 						         WCHAR* LibraryPath_x86, WCHAR* LibraryPath_x64, PVOID InPassThruBuffer, INT32 InPassThruSize)
 {
@@ -14,8 +20,13 @@ EASYHOOK_NT_API RhInjectLibrary(INT32 TargetProcessID, INT32 WakeUpThreadID, INT
 	BOOL	 bIs64BitTarget = FALSE;
 
 	PREMOTE_INFOR RemoteInfo = NULL;
+	PREMOTE_INFOR CorrectRemoteInfo = NULL;
 	ULONG32  RemoteInfoLength = 0;
+	ULONG_PTR CorrectValue = 0;
 
+	HANDLE	 RemoteThreadHandle = NULL;
+	HANDLE   RemoteSignalEvent = NULL;
+	HANDLE   HandleArrary[2] = { 0 };
 	WCHAR    UserInjectLibrary[MAX_PATH + 1] = { 0 };
 	ULONG32  UserInjectLibraryLength = 0;
 	WCHAR    EasyHookWorkPath[MAX_PATH + 1] = { 0 };	// 调用Dll的注入主程序完整路径
@@ -30,6 +41,12 @@ EASYHOOK_NT_API RhInjectLibrary(INT32 TargetProcessID, INT32 WakeUpThreadID, INT
 #endif
 	ULONG32  EasyHookEntryProcNameLength = 0;
 
+	ULONG32 ShellCodeLength = 0;
+	PUCHAR  RemoteShellCodeBase = NULL;
+
+	ULONG32 Index = 0;
+	ULONG32 ErrorCode = 0;
+	SIZE_T  ReturnLength = 0;
 
 	// 检查参数合法性
 	if (InPassThruSize > MAX_PASSTHRU_SIZE)
@@ -137,12 +154,242 @@ EASYHOOK_NT_API RhInjectLibrary(INT32 TargetProcessID, INT32 WakeUpThreadID, INT
 	RemoteInfo->WakeUpThreadID = WakeUpThreadID;
 	RemoteInfo->IsManaged = InjectionOptions & EASYHOOK_INJECT_MANAGED;		// 注入选项
 
-	
+	ShellCodeLength = GetShellCodeSize();
+	 
+	RemoteShellCodeBase = (PUCHAR)VirtualAllocEx(TargetProcessHandle, NULL, ShellCodeLength + RemoteInfoLength, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+	if (RemoteShellCodeBase == NULL)
+	{
+		THROW(STATUS_NO_MEMORY, L"Unable to allocate memory in target process.");
+	}
 
+	// 修正当前自己进程空间里的RemoteInfo里的字符串指针
+	PBYTE Offset = (PBYTE)(RemoteInfo + 1);	// 越过结构体本身 准备写入字符串
+
+	RemoteInfo->EasyHookEntryProcName = (CHAR*)Offset;
+	RemoteInfo->EasyHookDllPath = (WCHAR*)(Offset += EasyHookEntryProcNameLength);
+	RemoteInfo->EasyHookWorkPath = (WCHAR*)(Offset += EasyHookDllPathLength);
+	RemoteInfo->UserData = (PBYTE)(Offset += EasyHookWorkPathLength);
+	RemoteInfo->UserInjectLibrary = (WCHAR*)(Offset += InPassThruSize);
+
+	RemoteInfo->Size = RemoteInfoLength;
+	RemoteInfo->HostProcessID = GetCurrentProcessId();
+	RemoteInfo->UserDataSize = 0;
+
+	Offset += UserInjectLibraryLength;	//  结构体和字符串尾部 - 也就是在当前进程空间申请空间的尾部
+
+	if ((ULONG)(Offset - (PBYTE)RemoteInfo) > RemoteInfo->Size)
+	{
+		THROW(STATUS_BUFFER_OVERFLOW, L"A buffer overflow in internal memory was detected.");
+	}
+
+	// 将字符串放入申请到的结构体中
+	RtlCopyMemory(RemoteInfo->EasyHookWorkPath, EasyHookWorkPath, EasyHookWorkPathLength);
+	RtlCopyMemory(RemoteInfo->EasyHookDllPath, EasyHookDllPath, EasyHookDllPathLength);
+	RtlCopyMemory(RemoteInfo->EasyHookEntryProcName, EasyHookEntryProcName, EasyHookEntryProcNameLength);
+	RtlCopyMemory(RemoteInfo->UserInjectLibrary, UserInjectLibrary, UserInjectLibraryLength);
+
+	// Hook 函数的参数放入
+	if (InPassThruBuffer != NULL)
+	{
+		RtlCopyMemory(RemoteInfo->UserData, InPassThruBuffer, InPassThruSize);
+
+		RemoteInfo->UserDataSize = InPassThruSize;
+	}
+
+	// 写入ShellCode - 先放入 ShellCode 再让入 RemoteInfo
+	if (!WriteProcessMemory(TargetProcessHandle, RemoteShellCodeBase, (PVOID)GetInjectionPtr(), ShellCodeLength, &ReturnLength) || ReturnLength != ShellCodeLength)
+	{
+		THROW(STATUS_INTERNAL_ERROR, L"Unable to write into target process memory.");
+	}
+
+	// 创建通信事件
+	RemoteSignalEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+	if (RemoteSignalEvent == NULL)
+	{
+		THROW(STATUS_INSUFFICIENT_RESOURCES, L"Unable to create event.");
+	}
+
+	// 将事件句柄 Duplicate 到对面进程空间, 但是将这个新的句柄值暂存在当前进程空间
+	if (!DuplicateHandle(GetCurrentProcess(), RemoteSignalEvent, TargetProcessHandle, &RemoteInfo->RemoteSignalEvent, EVENT_ALL_ACCESS, FALSE, 0))
+	{
+		THROW(STATUS_INTERNAL_ERROR, L"Failed to duplicate remote event.");
+	}
+
+	//  重新修正结构体后面的字符串指针 - 将他们的地址 修正为是对面进程里的值
+	//  结构体里面指针本来指向是当前进程空间里的地址 - 也就是结构体后面字符串的首地址
+	//  但是当我们把结构体写入到对方进程空间里的时候，这些指针也应该指向结构体后面的地址 - 所以我们要将他们修正
+	CorrectRemoteInfo = (PREMOTE_INFOR)(RemoteShellCodeBase + ShellCodeLength);
+	CorrectValue = (PUCHAR)CorrectRemoteInfo - (PUCHAR)RemoteInfo;
+
+	RemoteInfo->EasyHookDllPath = (wchar_t*)(((PUCHAR)RemoteInfo->EasyHookDllPath) + CorrectValue);
+	RemoteInfo->EasyHookEntryProcName = (char*)(((PUCHAR)RemoteInfo->EasyHookEntryProcName) + CorrectValue);
+	RemoteInfo->EasyHookWorkPath = (wchar_t*)(((PUCHAR)RemoteInfo->EasyHookWorkPath) + CorrectValue);
+	RemoteInfo->UserInjectLibrary = (wchar_t*)(((PUCHAR)RemoteInfo->UserInjectLibrary) + CorrectValue);
+
+	if (RemoteInfo->UserData != NULL)
+	{
+		RemoteInfo->UserData = (PBYTE)(((PUCHAR)RemoteInfo->UserData) + CorrectValue);
+	}
+
+	RemoteInfo->RemoteEntryPoint = RemoteShellCodeBase;
+
+	if (!WriteProcessMemory(TargetProcessHandle, CorrectRemoteInfo, RemoteInfo, RemoteInfoLength, &ReturnLength) || ReturnLength != RemoteInfoLength)
+	{
+		THROW(STATUS_INTERNAL_ERROR, L"Unable to write into target process memory.");
+	}
+
+	// 启动远程线程
+	if ((InjectionOptions & EASYHOOK_INJECT_STEALTH) != 0)
+	{
+		FORCE(RhCreateStealthRemoteThread(TargetProcessID, (LPTHREAD_START_ROUTINE)RemoteShellCodeBase, CorrectRemoteInfo, &RemoteThreadHandle));
+	}
+	else
+	{
+		if (!RTL_SUCCESS(RtlNtCreateThreadEx(TargetProcessHandle, (LPTHREAD_START_ROUTINE)RemoteShellCodeBase, CorrectRemoteInfo, FALSE, &RemoteThreadHandle)))
+		{
+			RemoteThreadHandle = CreateRemoteThread(TargetProcessHandle, NULL, 0, (LPTHREAD_START_ROUTINE)RemoteShellCodeBase, CorrectRemoteInfo, 0, NULL);
+			if (RemoteThreadHandle == NULL)
+			{
+				THROW(STATUS_ACCESS_DENIED, L"Unable to create remote thread.");
+			}
+		}
+	}
+
+	// 注意这两个句柄的先后顺序
+	HandleArrary[1] = RemoteSignalEvent;
+	HandleArrary[0] = RemoteThreadHandle;
+
+	Index = WaitForMultipleObjects(2, HandleArrary, FALSE, INFINITE);
+
+	if (Index == WAIT_OBJECT_0)	// 这其实是异常处理 - 在ShellCode调用过程里 进入ASM ShellCode(启动远程线程) 然后 entry等等操作 
+								// 最后在调用最后的入口函数之前 SetEvent, 让等待返回，这时候的返回值应该是 1 也就是正常处理
+								// 但是如果在这之前的任何地方发生了错误，线程就会结束。那么这时候等待函数返回值就是0 那么就会进入 if操作 得到错误结果，显示
+	{
+		GetExitCodeThread(RemoteThreadHandle, &ErrorCode);
+
+		SetLastError(ErrorCode & 0x0FFFFFFF);
+
+		switch (ErrorCode & 0xF0000000)
+		{
+		case 0x10000000:
+		{
+			THROW(STATUS_INTERNAL_ERROR, L"Unable to find internal entry point.");
+		}
+		case 0x20000000:
+		{
+			THROW(STATUS_INTERNAL_ERROR, L"Unable to make stack executable.");
+		}
+		case 0x30000000:
+		{
+			THROW(STATUS_INTERNAL_ERROR, L"Unable to release injected library.");
+		}
+		case 0x40000000:
+		{
+			THROW(STATUS_INTERNAL_ERROR, L"Unable to find EasyHook library in target process context.");
+		}
+		case 0xF0000000:
+			// Error in C++ Injection Completeion
+		{
+			switch (ErrorCode & 0xFF)
+			{
+#ifdef _M_X64
+			case 20:
+			{
+				THROW(STATUS_INVALID_PARAMETER_5, L"Unable to load the given 64-bit library into target process.");
+			}
+			case 21:
+			{
+				THROW(STATUS_INVALID_PARAMETER_5, L"Unable to find the required native entry point in the given 64-bit library.");
+			}
+			case 12:
+			{
+				THROW(STATUS_INVALID_PARAMETER_5, L"Unable to find the required managed entry point in the given 64-bit library.");
+			}
+#else
+			case 20:
+			{
+				THROW(STATUS_INVALID_PARAMETER_4, L"Unable to load the given 32-bit library into target process.");
+			}
+			case 21:
+			{
+				THROW(STATUS_INVALID_PARAMETER_4, L"Unable to find the required native entry point in the given 32-bit library.");
+			}
+			case 12:
+			{
+				THROW(STATUS_INVALID_PARAMETER_4, L"Unable to find the required managed entry point in the given 32-bit library.");
+			}
+#endif
+			case 13:
+			{
+				THROW(STATUS_DLL_INIT_FAILED, L"The user defined managed entry point failed in the target process. Make sure that EasyHook is registered in the GAC. Refer to event logs for more information.");
+			}
+			case 1: 
+			{
+				THROW(STATUS_INTERNAL_ERROR, L"Unable to allocate memory in target process.");
+			}
+			case 2: 
+			{
+				THROW(STATUS_INTERNAL_ERROR, L"Unable to adjust target's PATH variable.");
+			}
+			case 3:
+			{
+				THROW(STATUS_INTERNAL_ERROR, L"Can't get Kernel32 module handle.");
+			}
+			case 10: 
+			{
+				THROW(STATUS_INTERNAL_ERROR, L"Unable to load 'mscoree.dll' into target process.");
+			}
+			case 11: 
+			{
+				THROW(STATUS_INTERNAL_ERROR, L"Unable to bind NET Runtime to target process.");
+			}
+			case 22:
+			{
+				THROW(STATUS_INTERNAL_ERROR, L"Unable to signal remote event.");
+			}
+			default: 
+				THROW(STATUS_INTERNAL_ERROR, L"Unknown error in injected C++ completion routine.");
+			}
+		}
+		case 0:
+		{
+			THROW(STATUS_INTERNAL_ERROR, L"C++ completion routine has returned success but didn't raise the remote event.");
+		}
+		default:
+		{
+			THROW(STATUS_INTERNAL_ERROR, L"Unknown error in injected assembler code.");
+		}
+		}
+	}
+	else if (Index != WAIT_OBJECT_0 + 1)	// 两个句柄都没有返回
+	{
+		THROW(STATUS_INTERNAL_ERROR, L"Unable to wait for injection completion due to timeout. ");
+	}
+
+	RETURN;
 
 THROW_OUTRO:
 FINALLY_OUTRO:
 	{
+		if (TargetProcessHandle != NULL)
+		{
+			CloseHandle(TargetProcessHandle);
+		}
+
+		if (RemoteInfo != NULL)
+		{
+			RtlFreeMemory(RemoteInfo);
+		}
+
+		if (RemoteThreadHandle != NULL)
+		{
+			CloseHandle(RemoteThreadHandle);
+		}
+
+		if (RemoteSignalEvent != NULL)
+		{
+			CloseHandle(RemoteSignalEvent);
+		}
 
 		return NtStatus;
 	}
@@ -529,4 +776,81 @@ BOOL EASYHOOK_API GetRemoteModuleExportDirectory(HANDLE ProcessHandle, HMODULE M
 
 	free(RemoteModulePEHeader);
 	return TRUE;
+}
+
+// ASM 文件 操作
+static DWORD InjectionSize = 0;
+
+#ifdef _M_X64
+	EXTERN_C VOID Injection_ASM_x64();
+#else
+EXTERN_C VOID __stdcall Injection_ASM_x86();
+#endif
+
+BYTE* GetInjectionPtr()	// 得到ASM函数首地址
+{
+#ifdef _M_X64
+	BYTE* Ptr = (BYTE*)Injection_ASM_x64;
+#else
+	BYTE* Ptr = (BYTE*)Injection_ASM_x86;
+#endif
+
+	// stdcall 解析 - 第一次跳转 进去是又一次跳转 E9 = jump, 得到E9后面的跳转偏移
+	if (*Ptr == 0xE9)
+	{
+		Ptr += *((int*)(Ptr + 1)) + 5;
+		// Ptr + 1 - 跳过 E9。当int* 解析一次,得到跳转的偏移。跳转的基地址是下一条指令的基地址 Ptr += 5。 最后得到二次跳转到的实际地址，也就是函数实现的实际地址。
+	}
+
+	return Ptr;
+}
+
+ULONG GetShellCodeSize()
+{
+	UCHAR*          Ptr;
+	UCHAR*          BasePtr;
+	ULONG           Index;
+	ULONG           Signature;
+
+	if (InjectionSize != 0)
+		return InjectionSize;
+
+	// 查找硬编码 得到长度
+	BasePtr = Ptr = GetInjectionPtr();
+
+	for (Index = 0; Index < 2000 /* some always large enough value*/; Index++)
+	{
+		Signature = *((ULONG32*)Ptr);
+
+		if (Signature == 0x12345678)		// 自己ASM文件末尾手动写得标志
+		{
+			InjectionSize = (ULONG)(Ptr - BasePtr);
+
+			return InjectionSize;
+		}
+
+		Ptr++;
+	}
+
+	ASSERT(FALSE, L"thread.c - ULONG GetInjectionSize()");
+
+	return 0;
+}
+
+extern DWORD RhTlsIndex;
+EASYHOOK_NT_INTERNAL RhSetWakeUpThreadID(ULONG32 InThreadID)
+{
+	NTSTATUS NtStatus;
+
+	if (!TlsSetValue(RhTlsIndex, (PVOID)(size_t)InThreadID))
+	{
+		THROW(STATUS_INTERNAL_ERROR, L"Unable to set TLS value.");
+	}
+
+	RETURN;
+
+THROW_OUTRO:
+FINALLY_OUTRO:
+	return NtStatus;
+
 }

@@ -172,16 +172,24 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
       </PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="RemoteHook\thread.c">
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Default</CompileAs>
-    </ClCompile>
+    <ClCompile Include="RemoteHook\Entry.cpp" />
+    <ClCompile Include="RemoteHook\Stealth.c" />
+    <ClCompile Include="RemoteHook\Thread.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\DriverShared\DriverShared.h" />
     <ClInclude Include="..\DriverShared\Rtl\Rtl.h" />
     <ClInclude Include="..\Public\EasyHook.h" />
     <ClInclude Include="common.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <MASM Include="..\DriverShared\ASM\HookEntry_x64.asm">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+    </MASM>
+    <MASM Include="..\DriverShared\ASM\HookEntry_x86.asm">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+    </MASM>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

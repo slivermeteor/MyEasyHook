@@ -31,10 +31,10 @@ LONG RtlGetCurrentModulePath(WCHAR* OutPath, ULONG InMaxLength);
 typedef struct _REMOTE_INFOR_
 {
 	// will be the same for all processes
-	WRAP_ULONG64(wchar_t* UserLibrary);  // fixed 0
-	WRAP_ULONG64(wchar_t* EasyHookPath); // fixed 8
-	WRAP_ULONG64(wchar_t* PATH);		 // fixed 16
-	WRAP_ULONG64(char* EasyHookEntry);   // fixed 24
+	WRAP_ULONG64(wchar_t* UserInjectLibrary);  // fixed 0
+	WRAP_ULONG64(wchar_t* EasyHookDllPath); // fixed 8
+	WRAP_ULONG64(wchar_t* EasyHookWorkPath);		 // fixed 16
+	WRAP_ULONG64(char* EasyHookEntryProcName);   // fixed 24
 	WRAP_ULONG64(void* RemoteEntryPoint); // fixed 32
 	WRAP_ULONG64(void* LoadLibraryW);	 // fixed; 40
 	WRAP_ULONG64(void* FreeLibrary);     // fixed; 48
@@ -45,16 +45,19 @@ typedef struct _REMOTE_INFOR_
 	WRAP_ULONG64(void* GetLastError);    // fixed; 88
 
 	BOOL            IsManaged;
-	HANDLE          hRemoteSignal;
-	DWORD           HostProcess;
-	DWORD           Size;
-	BYTE*           UserData;
+	HANDLE          RemoteSignalEvent;
+	DWORD           HostProcessID;
+	ULONG32         Size;		//  整个结构体和后面字符串的全部长度
+	BYTE*           UserData;	//  真正Hook函数传入的参数
 	DWORD           UserDataSize;
 	ULONG           WakeUpThreadID;
 }REMOTE_INFOR, *PREMOTE_INFOR;
 
 
 extern HMODULE	CurrentModuleHandle;
+extern HANDLE  EasyHookHeapHandle;
+extern HANDLE  Kernel32Handle;
+extern HANDLE  NtdllHandle;
 
 #define RTL_SUCCESS(ntstatus)       SUCCEEDED(ntstatus)
 

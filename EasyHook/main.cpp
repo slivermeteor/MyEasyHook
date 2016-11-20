@@ -27,15 +27,23 @@ int main()
 
 #ifndef _WIN64
 	WCHAR wzInjectDllPath[MAX_PATH] = L"InjectDll32.dll";
+	NTSTATUS Status = RhInjectLibrary(TargetProcessID, 0, EASYHOOK_INJECT_DEFAULT, wzInjectDllPath, NULL, NULL, 0);
 #else
 	WCHAR wzInjectDllPath[MAX_PATH] = L"InjectDll64.dll";
+	NTSTATUS Status = RhInjectLibrary(TargetProcessID, 0, EASYHOOK_INJECT_DEFAULT, NULL, wzInjectDllPath, NULL, 0);
 #endif
 
-	NTSTATUS Status = RhInjectLibrary(TargetProcessID, 0, EASYHOOK_INJECT_DEFAULT, nullptr, wzInjectDllPath, nullptr, 0);
+	
 	if (Status != STATUS_SUCCESS)
 	{
-		cout << "Remote hook failed. Error Code:" << GetLastError() << endl;
+		cout << "Remote hook failed. Error Code:" << hex << Status << endl;
+		printf("Error Message:%S\r\n", RtlGetLastErrorString());
 	}
+	else
+	{
+		cout << "Remote hook success." << endl;
+	}
+
 	system("pause");
 	return 0;
 }

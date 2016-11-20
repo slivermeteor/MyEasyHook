@@ -23,6 +23,15 @@
 #define MAX_PASSTHRU_SIZE           1024 * 64
 
 #define EASYHOOK_INJECT_DEFAULT				0x00000000
+#define EASYHOOK_INJECT_STEALTH				0x10000000 // (experimental)
+
+typedef struct _REMOTE_ENTRY_INFOR_
+{
+	ULONG           HostProcessPID;
+	UCHAR*          UserData;
+	ULONG           UserDataSize;
+}REMOTE_ENTRY_INFOR, *PREMOTE_ENTRY_INFOR;
+
 
 // EasyHookDll/Thread.c 导出函数
 EASYHOOK_NT_API RhInjectLibrary(INT32 TargetProcessID, INT32 WakeUpThreadID, INT32 InjectionOptions, WCHAR* LibraryPath_x86, WCHAR* LibraryPath_x64, 
@@ -32,6 +41,14 @@ EASYHOOK_NT_API RhIsX64Process(ULONG32 ProcessID, BOOL * bIsx64);
 
 BOOL EASYHOOK_API GetRemoteModuleExportDirectory(HANDLE ProcessHandle, HMODULE ModuleHandle,
 	PIMAGE_EXPORT_DIRECTORY RemoteExportDirectory, IMAGE_DOS_HEADER RemoteDosHeader, IMAGE_NT_HEADERS RemoteNtHeaders);
+
+// EasyHookDll/Stealth.c 导出函数
+EASYHOOK_NT_API RhCreateStealthRemoteThread(ULONG32 InTargetProcessID, LPTHREAD_START_ROUTINE InRemoteRoutine,
+	PVOID InRemoteParameter, PHANDLE OutRemoteThreadHandle);
+
+// Error.c 导出函数
+DRIVER_SHARED_API(PWCHAR, RtlGetLastErrorString());
+DRIVER_SHARED_API(NTSTATUS, RtlGetLastError());
 
 
 

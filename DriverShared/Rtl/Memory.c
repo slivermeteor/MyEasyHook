@@ -10,13 +10,48 @@ BOOL RtlIsValidPointer(PVOID InPtr, ULONG InSize)
 	return TRUE;
 }
 
+VOID RtlCopyMemory(PVOID InDest, PVOID InSource, ULONG32 InByteCount)
+{
+	if (InDest == NULL || InSource == NULL)
+	{
+		return;
+	}	
+	ULONG32 Index = 0;
+	PUCHAR  Dest = (PUCHAR)InDest;
+	PUCHAR  Source = (PUCHAR)InSource;
+
+	for (int Index = 0; Index < InByteCount; Index++)
+	{
+		*Dest = *Source;
+
+		Dest++;
+		Source++;
+	}
+
+	return ;
+}
+
+VOID RtlFreeMemory(PVOID InPointer)
+{
+	if (InPointer == NULL)
+	{
+		return;
+	}
+
+#ifdef _DEBUG
+	free(InPointer);
+#else
+	HeapFree(EasyHookHeapHandle, 0, InPointer);
+#endif
+}
+
 VOID* RtlAllocateMemory(BOOL InZeroMemory, ULONG32 InSize)
 {
 	PVOID Return =
 #ifdef _DEBUG
 		malloc(InSize);
 #else
-		//HeapAlloc();
+		HeapAlloc(EasyHookHeapHandle, 0, InSize);
 #endif
 
 	if (InZeroMemory && Return != NULL)

@@ -21,14 +21,14 @@
     <Filter Include="DriverShared\Rtl">
       <UniqueIdentifier>{ca439cfa-56ad-456a-b481-b68b23edbda3}</UniqueIdentifier>
     </Filter>
+    <Filter Include="DriverShared\ASM">
+      <UniqueIdentifier>{785c7237-24f9-4cdf-8419-25ed093a112c}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <Text Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="RemoteHook\thread.c">
-      <Filter>RemoteHook</Filter>
-    </ClCompile>
     <ClCompile Include="..\DriverShared\Rtl\Error.c">
       <Filter>DriverShared\Rtl</Filter>
     </ClCompile>
@@ -44,6 +44,15 @@
     <ClCompile Include="..\DriverShared\Rtl\String.c">
       <Filter>DriverShared\Rtl</Filter>
     </ClCompile>
+    <ClCompile Include="RemoteHook\Entry.cpp">
+      <Filter>RemoteHook</Filter>
+    </ClCompile>
+    <ClCompile Include="RemoteHook\Stealth.c">
+      <Filter>RemoteHook</Filter>
+    </ClCompile>
+    <ClCompile Include="RemoteHook\Thread.c">
+      <Filter>RemoteHook</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Public\EasyHook.h">
@@ -58,5 +67,13 @@
     <ClInclude Include="..\DriverShared\Rtl\Rtl.h">
       <Filter>DriverShared\Rtl</Filter>
     </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <MASM Include="..\DriverShared\ASM\HookEntry_x64.asm">
+      <Filter>DriverShared\ASM</Filter>
+    </MASM>
+    <MASM Include="..\DriverShared\ASM\HookEntry_x86.asm">
+      <Filter>DriverShared\ASM</Filter>
+    </MASM>
   </ItemGroup>
 </Project>

@@ -40,7 +40,10 @@ ULONG32 RtlAnsiLength(CHAR* InString);
 #undef RtlZeroMemory
 VOID RtlZeroMemory(PVOID InStart, ULONG32 InByteCount);
 
-VOID* RtlAllocateMemory(BOOL InZeroMemory, ULONG32 InSize);
+#undef RtlCopyMemory
+VOID RtlCopyMemory(PVOID InDest, PVOID InSource, ULONG32 InByteCount);
 
+VOID* RtlAllocateMemory(BOOL InZeroMemory, ULONG32 InSize);
+VOID RtlFreeMemory(PVOID InPointer);
 
 #endif

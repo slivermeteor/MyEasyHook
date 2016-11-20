@@ -10,7 +10,7 @@
 // EasyHookDll/thead.c 非导出函数
 EASYHOOK_NT_INTERNAL RtlNtCreateThreadEx(HANDLE ProcessHandle, LPTHREAD_START_ROUTINE ThreadStart, PVOID ThreadParameter, BOOL IsThreadSuspended, HANDLE * ThreadHandle);
 EASYHOOK_NT_INTERNAL NtForceLdrInitializeThunk(HANDLE ProcessHandle);
-PVOID  GetRemoteProcAddress(ULONG32 ProcessID, HANDLE ProcessHandle, CHAR* strModuleName, CHAR* strFunctioName);
-HMODULE GetRemoteModuleHandle(ULONG32 ProcessID, CHAR* strModuleName);
+EASYHOOK_NT_INTERNAL RhSetWakeUpThreadID(ULONG32 InThreadID);
+
 
 #endif
