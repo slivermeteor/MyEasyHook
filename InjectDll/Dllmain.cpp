@@ -30,7 +30,15 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 	return TRUE;
 }
 
-EXTERN_C __declspec(dllexport) VOID  _stdcall EasyHookInjectionEntry()
+EXTERN_C __declspec(dllexport) VOID  _stdcall EasyHookInjectionEntry(PVOID Data)
+{
+	MessageBoxA(NULL, "Success", "EasyHookInject", MB_OK);
+
+	FreeLibraryAndExitThread(DllModule, 0);
+	return;
+}
+
+EXTERN_C __declspec(dllexport) VOID  _stdcall NativeInjectionEntryPoint(PVOID Data)
 {
 	MessageBoxA(NULL, "Success", "EasyHookInject", MB_OK);
 

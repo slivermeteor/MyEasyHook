@@ -1,5 +1,7 @@
 #include "common.h"
 
+#define PAGE_SIZE	0x1000
+
 typedef struct _STEALTH_CONTEXT_
 {
 	// Proc and handle
@@ -27,13 +29,13 @@ typedef struct _STEALTH_CONTEXT_
 
 	// register
 	ULONG64		Rax;
-	ULONG64		Rbx;
 	ULONG64		Rcx;
 	ULONG64		Rdx;
+	ULONG64		Rbp;
+	ULONG64		Rsp;	
 	ULONG64		Rsi;
 	ULONG64		Rdi;
-	ULONG64		Rbp;
-	ULONG64		Rsp;
+	ULONG64		Rbx;
 	ULONG64		Rip;
 	ULONG64		RFlags;
 	ULONG64		R8;
@@ -46,7 +48,8 @@ typedef struct _STEALTH_CONTEXT_
 	ULONG64		R15;
 }STEALTH_CONTEXT, *PSTEALTH_CONTEXT;
 
-
+ULONG32 GetStealthStubSize();
+PBYTE GetStealthStubPtr();
 
 EASYHOOK_NT_API RhCreateStealthRemoteThread(ULONG32 InTargetProcessID, LPTHREAD_START_ROUTINE InRemoteRoutine,
 	PVOID InRemoteParameter, PHANDLE OutRemoteThreadHandle)
@@ -54,6 +57,7 @@ EASYHOOK_NT_API RhCreateStealthRemoteThread(ULONG32 InTargetProcessID, LPTHREAD_
 	NTSTATUS NtStatus = STATUS_SUCCESS;
 	HANDLE	 TargetProcessHandle = NULL;
 	BOOL     bIsTarget64Bit = FALSE;
+	BOOL	 bIsSuspend = FALSE;
 	HANDLE   ThreadSnapshotHandle = NULL;
 	HANDLE	 HijackThreadHandle = NULL;
 	ULONG32	 HijackThreadID = 0;
@@ -62,6 +66,12 @@ EASYHOOK_NT_API RhCreateStealthRemoteThread(ULONG32 InTargetProcessID, LPTHREAD_
 
 	THREADENTRY32 ThreadEntry = { 0 };
 	STEALTH_CONTEXT LocalContext = { 0 };
+	PSTEALTH_CONTEXT RemoteContext = NULL;
+	ULONG32			ContextSize = GetStealthStubSize() + sizeof(STEALTH_CONTEXT);
+
+	HANDLE CompletionEventHandle = NULL;
+	HANDLE SynchronizationEventHandle = NULL;
+	SIZE_T	BytesWritten = 0;
 
 	RtlZeroMemory(&LocalContext, sizeof(STEALTH_CONTEXT));
 
@@ -89,13 +99,15 @@ EASYHOOK_NT_API RhCreateStealthRemoteThread(ULONG32 InTargetProcessID, LPTHREAD_
 	FORCE(RhIsX64Process(InTargetProcessID, &bIsTarget64Bit));
 
 	if (bIsTarget64Bit)
+	{
 		THROW(STATUS_WOW_ASSERTION, L"It is not supported to directly operate through the WOW64 barrier.");
+	}		
 #endif
 
 	ThreadEntry.dwSize = sizeof(THREADENTRY32);
 
 	ThreadSnapshotHandle = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
-	if (ThreadSnapshotHandle == NULL)
+	if (ThreadSnapshotHandle == INVALID_HANDLE_VALUE)
 	{
 		THROW(STATUS_INTERNAL_ERROR, L"Unable to enumerate system threads.");
 	}
@@ -117,19 +129,20 @@ EASYHOOK_NT_API RhCreateStealthRemoteThread(ULONG32 InTargetProcessID, LPTHREAD_
 			}
 
 			SuspendCount = SuspendThread(HijackThreadHandle);
-			if (SuspendCount != 0)	// 如果返回不等于 - 线程曾经被挂起过 / 函数失败
+			if (SuspendCount != 0)	// 如果返回不等于0 - 线程曾经被挂起过 / 函数失败
 			{
 				if (SuspendCount != -1)	// 不是失败的情况,这个线程曾经被挂起过。我们不选用，恢复它，另寻线程
 				{
 					ResumeThread(HijackThreadHandle);
 				}
 
+				CloseHandle(HijackThreadHandle);		// 不应该关闭线程句柄吗？
 				HijackThreadHandle = NULL;
 				continue;
 			}
 
 			HijackThreadID = ThreadEntry.th32ThreadID;
-
+			bIsSuspend = TRUE;
 			break;
 		}
 	} while (Thread32Next(ThreadSnapshotHandle, &ThreadEntry));
@@ -180,11 +193,211 @@ EASYHOOK_NT_API RhCreateStealthRemoteThread(ULONG32 InTargetProcessID, LPTHREAD_
 	LocalContext.Rdi = Context.Edi;
 	LocalContext.Rip = Context.Eip;
 	LocalContext.RFlags = Context.EFlags;
+	//printf("Hijack Eip:%x\r\n,Store Rip:%llx\r\n", Context.Eip, LocalContext.Rip);
 #endif
-	LocalContext.CreateThread = (PVOID)GetProcAddress()
+	
+	// 做劫持的准备工作
+	LocalContext.CreateThread = (PVOID)GetProcAddress(Kernel32Handle, "CreateThread");
+	LocalContext.SetEvent = (PVOID)GetProcAddress(Kernel32Handle, "SetEvent");
+	LocalContext.CloseHandle = (PVOID)GetProcAddress(Kernel32Handle, "CloseHandle");
+	LocalContext.WaitForSingleObject = (PVOID)GetProcAddress(Kernel32Handle, "WaitForSingleObject");
 
+	LocalContext.RemoteThreadStart = (PVOID)InRemoteRoutine;
+	LocalContext.RemoteThreadParameter = InRemoteParameter;
+
+	CompletionEventHandle = CreateEvent(NULL, TRUE, FALSE, NULL);
+	SynchronizationEventHandle = CreateEvent(NULL, TRUE, FALSE, NULL);
+	if (CompletionEventHandle == NULL || SynchronizationEventHandle == NULL)
+	{
+		THROW(STATUS_INTERNAL_ERROR, L"Unable to create event.");
+	}
+	
+	if (!DuplicateHandle(GetCurrentProcess(), CompletionEventHandle, TargetProcessHandle, &LocalContext.CompletionEventHandle, 0, FALSE, DUPLICATE_SAME_ACCESS) ||
+		!DuplicateHandle(GetCurrentProcess(), SynchronizationEventHandle, TargetProcessHandle, &LocalContext.SynchronEventHandle, 0, FALSE, DUPLICATE_SAME_ACCESS))
+	{
+		THROW(STATUS_INTERNAL_ERROR, L"Unable to duplicate event.");
+	}
+
+#if !_M_X64 //???
+	__pragma(warning(push))
+	__pragma(warning(disable:4305))
+#endif
+	if (VirtualAllocEx(TargetProcessHandle, (PVOID)(LocalContext.Rsp - PAGE_SIZE * 20), PAGE_SIZE, MEM_COMMIT, PAGE_EXECUTE_READWRITE) == NULL)
+	{
+		THROW(STATUS_NO_MEMORY, L"Unable to allocate executable thread stack.");
+	}
+	RemoteContext = (PSTEALTH_CONTEXT)(LocalContext.Rsp - PAGE_SIZE * 19 - ContextSize);
+	//																	  |RemoteContext
+	//HighAddress                -19 * PAGE_SIZE|     -ContextSize-       |      |- 20 * PAGE_SIZE
+	//											|			--PAGE_SIZE--		 |
+#if !_M_X64
+	__pragma(warning(pop))
+#endif
+
+#ifdef _M_X64
+	Context.Rip = (ULONG64)RemoteContext;								// Rip 保存StealthStub_ASM_x__ 函数起始地址
+	Context.Rbx = (ULONG64)RemoteContext + GetStealthStubSize();		// 越过函数 就是参数 - Rbx保存参数位置
+#else
+	Context.Eip = (ULONG32)RemoteContext;
+	Context.Ebx = (ULONG32)RemoteContext + GetStealthStubSize();
+#endif
+
+	// 写入 LocalContext - StealthStub_ASM 函数的参数
+	if (!WriteProcessMemory(TargetProcessHandle, (PUCHAR)RemoteContext + GetStealthStubSize(), &LocalContext, sizeof(STEALTH_CONTEXT), &BytesWritten))
+	{
+		THROW(STATUS_INTERNAL_ERROR, L"Unable To Write StalthStub Parameter.");
+	}
+
+	// 写入 StealthStub_ASM Code
+	if (!WriteProcessMemory(TargetProcessHandle, (PUCHAR)RemoteContext, GetStealthStubPtr(), GetStealthStubSize(), &BytesWritten))
+	{
+		THROW(STATUS_INTERNAL_ERROR, L"Unable To Write StealthStub Proc.");
+	}
+
+	// 设置Context
+	if (!SetThreadContext(HijackThreadHandle, &Context))
+	{
+		THROW(STATUS_INTERNAL_ERROR, L"Unable To Set Remote Thread Context.");
+	}
+
+	// 恢复劫持线程 - 线程按照设置的 E/Rip 执行 StealthStub_ASM
+	if (ResumeThread(HijackThreadHandle) == (DWORD)-1)
+	{
+		THROW(STATUS_INTERNAL_ERROR, L"Unable To Resume The Remote Thread.");
+	}
+	bIsSuspend = FALSE;
+
+	// 等待StealthStub_ASM 成功创建线程
+	if (WaitForSingleObject(SynchronizationEventHandle, INFINITE) != WAIT_OBJECT_0)
+	{
+		THROW(STATUS_INTERNAL_ERROR, L"Unable To Wait For Remote Thread Creation.");
+	}
+
+	// 劫持线程帮助创建远程线程成功 
+	// 重新读取一次Context -  在成功创建后，读取出远程线程句柄
+	if (!ReadProcessMemory(TargetProcessHandle, (PUCHAR)RemoteContext + GetStealthStubSize(), &LocalContext, sizeof(STEALTH_CONTEXT), &BytesWritten))
+	{
+		THROW(STATUS_INTERNAL_ERROR, L"Unable to re-read remote context.");
+	}
+
+	// 创建失败 - 异常退出
+	if (LocalContext.RemoteThreadHandle == NULL)
+	{
+		THROW(STATUS_INTERNAL_ERROR, L"Unable To Create Remote Thread.");
+	}
+
+	if (IsValidPointer(OutRemoteThreadHandle, sizeof(HANDLE)))
+	{
+		// Dup远程线程句柄
+		if (!DuplicateHandle(TargetProcessHandle, LocalContext.RemoteThreadHandle, GetCurrentProcess(), OutRemoteThreadHandle, 0, FALSE, DUPLICATE_SAME_ACCESS))
+		{
+			THROW(STATUS_INTERNAL_ERROR, L"Unable To Duplicate Remote Thread Handle.");
+		}
+	}
+
+	if (!SetEvent(CompletionEventHandle))	// 告诉被劫持线程 - Dup完成 
+	{
+		THROW(STATUS_INTERNAL_ERROR, L"Unable To Resume Hijacker Thread.");
+	}
+
+	RETURN;
 THROW_OUTRO:
 FINALLY_OUTRO:
+	{
+		if (CompletionEventHandle != NULL)
+		{
+			SetEvent(CompletionEventHandle);	// 保证劫持远程线程可以正常退出
+			CloseHandle(CompletionEventHandle);
+			CompletionEventHandle = NULL;
+		}
 
-	return NtStatus;
+		if (SynchronizationEventHandle != NULL)
+		{
+			CloseHandle(SynchronizationEventHandle);
+			SynchronizationEventHandle = NULL;
+		}
+
+		if (HijackThreadHandle != NULL)
+		{
+			if (bIsSuspend)
+			{
+				ResumeThread(HijackThreadHandle);
+				bIsSuspend = FALSE;
+			}
+			CloseHandle(HijackThreadHandle);
+			HijackThreadHandle = NULL;
+		}
+
+		if (TargetProcessHandle != NULL)
+		{
+			CloseHandle(TargetProcessHandle);
+			TargetProcessHandle = NULL;
+		}
+
+		if (ThreadSnapshotHandle != NULL)
+		{
+			CloseHandle(ThreadSnapshotHandle);
+			ThreadSnapshotHandle = NULL;
+		}
+		return NtStatus;
+	}
+}
+
+
+//	GetStealStubSize - ASM
+static DWORD StealthStubSize = 0;
+
+#ifdef _M_X64
+	EXTERN_C VOID StealthStub_ASM_x64();
+#else
+	EXTERN_C VOID __stdcall StealthStub_ASM_x86();
+#endif
+
+ULONG32 GetStealthStubSize()
+{
+	PUCHAR		Ptr = NULL;
+	PUCHAR		BasePtr = NULL;
+	ULONG32		Index = 0;
+	ULONG32		Signature = 0;
+
+	if (StealthStubSize != 0)
+	{
+		return StealthStubSize;
+	}
+
+	BasePtr = Ptr = GetStealthStubPtr();
+
+	for (Index = 0; Index < 2000; Index++)
+	{
+		Signature = *((PULONG)Ptr);
+
+		if (Signature == 0x12345678)
+		{
+			StealthStubSize = (ULONG)(Ptr - BasePtr);
+
+			return StealthStubSize;
+		}
+
+		Ptr++;
+	}
+	ASSERT(FALSE, L"Stealth.c - ULONG GetStealthStubSize()");
+
+	return 0;
+}
+
+PBYTE GetStealthStubPtr()
+{
+	PBYTE Ptr = (PBYTE)
+#ifdef _M_X64
+		StealthStub_ASM_x64;
+#else
+		StealthStub_ASM_x86;
+#endif
+
+	if (*Ptr == 0xE9)
+	{
+		Ptr += *((INT*)(Ptr + 1)) + 5;
+	}
+
+	return Ptr;
 }

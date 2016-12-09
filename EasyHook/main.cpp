@@ -12,7 +12,7 @@ using namespace std;
 #ifndef _WIN64
 	#pragma comment(lib, "EasyHookDll32.lib")	
 #else
-	#pragma comment(lib, "EasyHookDll64.lib")
+	#pragma comment(lib, "EasyHook64.lib")
 #endif
 
 ULONG32 GetProcessIdByName(WCHAR* wzProcessName);
@@ -27,10 +27,10 @@ int main()
 
 #ifndef _WIN64
 	WCHAR wzInjectDllPath[MAX_PATH] = L"InjectDll32.dll";
-	NTSTATUS Status = RhInjectLibrary(TargetProcessID, 0, EASYHOOK_INJECT_DEFAULT, wzInjectDllPath, NULL, NULL, 0);
+	NTSTATUS Status = RhInjectLibrary(TargetProcessID, 0, EASYHOOK_INJECT_STEALTH, wzInjectDllPath, NULL, NULL, 0);
 #else
 	WCHAR wzInjectDllPath[MAX_PATH] = L"InjectDll64.dll";
-	NTSTATUS Status = RhInjectLibrary(TargetProcessID, 0, EASYHOOK_INJECT_DEFAULT, NULL, wzInjectDllPath, NULL, 0);
+	NTSTATUS Status = RhInjectLibrary(TargetProcessID, 0, EASYHOOK_INJECT_STEALTH, NULL, wzInjectDllPath, NULL, 0);
 #endif
 
 	
