@@ -10,3 +10,6 @@ I have complete the function 'RhCreateStealthRemoteThread' what is named 'RhCrea
 But I find it can't work correctly when I use this function to install a remote hook.At the meantime, I use the Windbg to debug the function to 
 find the possible bug.So I commit a new issuse in the https://github.com/EasyHook/EasyHook/issues. For more information about what I find, pleast
 go to https://github.com/EasyHook/EasyHook/issues/159.
+
+##Future
+I have complete the Remote Hook function.At the next time, I will start to learn the Local Hook function.
