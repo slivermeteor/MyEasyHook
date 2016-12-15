@@ -28,7 +28,7 @@ typedef struct _STEALTH_CONTEXT_
 	};
 
 	// register
-	ULONG64		Rax;
+	ULONG64		Rax; // 0
 	ULONG64		Rcx;
 	ULONG64		Rdx;
 	ULONG64		Rbp;
@@ -37,7 +37,7 @@ typedef struct _STEALTH_CONTEXT_
 	ULONG64		Rdi;
 	ULONG64		Rbx;
 	ULONG64		Rip;
-	ULONG64		RFlags;
+	ULONG64		RFlags; // 9
 	ULONG64		R8;
 	ULONG64		R9;
 	ULONG64		R10;
@@ -45,7 +45,9 @@ typedef struct _STEALTH_CONTEXT_
 	ULONG64		R12;
 	ULONG64		R13;
 	ULONG64		R14;
-	ULONG64		R15;
+	ULONG64		R15;	// 17 
+	ULONG64     StackOne; // 18
+	ULONG64		StackTwo; // 19
 }STEALTH_CONTEXT, *PSTEALTH_CONTEXT;
 
 ULONG32 GetStealthStubSize();
@@ -181,7 +183,7 @@ EASYHOOK_NT_API RhCreateStealthRemoteThread(ULONG32 InTargetProcessID, LPTHREAD_
 	LocalContext.R13 = Context.R13;
 	LocalContext.R14 = Context.R14;
 	LocalContext.R15 = Context.R15;
-#else
+	#else
 	// 32位仍旧用64位来存储 - 只是用不全而已 
 	LocalContext.Rax = Context.Eax;
 	LocalContext.Rbx = Context.Ebx;
@@ -193,9 +195,22 @@ EASYHOOK_NT_API RhCreateStealthRemoteThread(ULONG32 InTargetProcessID, LPTHREAD_
 	LocalContext.Rdi = Context.Edi;
 	LocalContext.Rip = Context.Eip;
 	LocalContext.RFlags = Context.EFlags;
-	//printf("Hijack Eip:%x\r\n,Store Rip:%llx\r\n", Context.Eip, LocalContext.Rip);
 #endif
 	
+	/*
+	printf("Rax:%llx\r\n", LocalContext.Rax);
+	printf("Rbx:%llx\r\n", LocalContext.Rbx);
+	printf("Rcx:%llx\r\n", LocalContext.Rcx);
+	printf("Rdx:%llx\r\n", LocalContext.Rdx);
+	printf("Rbp:%llx\r\n", LocalContext.Rbp);
+	printf("Rsp:%llx\r\n", LocalContext.Rsp);
+	printf("Rsi:%llx\r\n", LocalContext.Rsi);
+	printf("Rdi:%llx\r\n", LocalContext.Rdi);
+	printf("Rip:%llx\r\n", LocalContext.Rip);
+	printf("RFlags:%llx\r\n", LocalContext.RFlags);
+	printf("R8-15:%llx,%llx,%llx,%llx,%llx,%llx,%llx,%llx\r\n", Context.R8, Context.R9, Context.R10, Context.R11, Context.R12, Context.R13, Context.R14, Context.R15);
+	*/
+
 	// 做劫持的准备工作
 	LocalContext.CreateThread = (PVOID)GetProcAddress(Kernel32Handle, "CreateThread");
 	LocalContext.SetEvent = (PVOID)GetProcAddress(Kernel32Handle, "SetEvent");

@@ -12,7 +12,7 @@ using namespace std;
 #ifndef _WIN64
 	#pragma comment(lib, "EasyHookDll32.lib")	
 #else
-	#pragma comment(lib, "EasyHook64.lib")
+	#pragma comment(lib, "EasyHookDll64.lib")
 #endif
 
 ULONG32 GetProcessIdByName(WCHAR* wzProcessName);
