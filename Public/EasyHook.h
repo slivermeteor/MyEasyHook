@@ -33,6 +33,7 @@ typedef struct _REMOTE_ENTRY_INFOR_
 }REMOTE_ENTRY_INFOR, *PREMOTE_ENTRY_INFOR;
 
 
+// Remote Hook
 // EasyHookDll/Thread.c µ¼³öº¯Êý
 EASYHOOK_NT_API RhInjectLibrary(INT32 TargetProcessID, INT32 WakeUpThreadID, INT32 InjectionOptions, WCHAR* LibraryPath_x86, WCHAR* LibraryPath_x64, 
 							    PVOID InPassThruBuffer, INT32 InPassThruSize);
@@ -51,5 +52,14 @@ DRIVER_SHARED_API(PWCHAR, RtlGetLastErrorString());
 DRIVER_SHARED_API(NTSTATUS, RtlGetLastError());
 
 
+// Local Hook
+typedef struct _LOCAL_HOOK_INFO_* PLOCAL_HOOK_INFO;
+typedef struct _HOOK_TRACE_INFO_
+{
+	PLOCAL_HOOK_INFO Link;
+}HOOK_TRACE_INFO, *PHOOK_TRACE_INFO;
+typedef PHOOK_TRACE_INFO TRACED_HOOK_HANDLE;
+
+DRIVER_SHARED_API(NTSTATUS, LhInstallHook(PVOID InEntryPoint, PVOID InHookProc, PVOID InCallBack, TRACED_HOOK_HANDLE OutTracedHookHandle));
 
 #endif

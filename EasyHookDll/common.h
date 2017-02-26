@@ -61,7 +61,4 @@ extern HANDLE  NtdllHandle;
 
 #define RTL_SUCCESS(ntstatus)       SUCCEEDED(ntstatus)
 
-
-
-
 #endif

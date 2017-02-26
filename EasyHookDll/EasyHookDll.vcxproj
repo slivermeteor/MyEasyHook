@@ -161,6 +161,12 @@
     <ClCompile Include="..\DriverShared\Rtl\File.c" />
     <ClCompile Include="..\DriverShared\Rtl\Memory.c" />
     <ClCompile Include="..\DriverShared\Rtl\String.c" />
+    <ClCompile Include="..\DriverShared\udis86\libudis86\decode.c" />
+    <ClCompile Include="..\DriverShared\udis86\libudis86\itab.c" />
+    <ClCompile Include="..\DriverShared\udis86\libudis86\syn-att.c" />
+    <ClCompile Include="..\DriverShared\udis86\libudis86\syn-intel.c" />
+    <ClCompile Include="..\DriverShared\udis86\libudis86\syn.c" />
+    <ClCompile Include="..\DriverShared\udis86\libudis86\udis86.c" />
     <ClCompile Include="dllmain.c">
       <CompileAsManaged Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</CompileAsManaged>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -175,6 +181,9 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
       </PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="LocalHook\Alloc.c" />
+    <ClCompile Include="LocalHook\Install.c" />
+    <ClCompile Include="LocalHook\Reloc.c" />
     <ClCompile Include="RemoteHook\Entry.cpp" />
     <ClCompile Include="RemoteHook\Stealth.c" />
     <ClCompile Include="RemoteHook\Thread.c" />
@@ -182,6 +191,7 @@
   <ItemGroup>
     <ClInclude Include="..\DriverShared\DriverShared.h" />
     <ClInclude Include="..\DriverShared\Rtl\Rtl.h" />
+    <ClInclude Include="..\DriverShared\udis86\udis86.h" />
     <ClInclude Include="..\Public\EasyHook.h" />
     <ClInclude Include="common.h" />
   </ItemGroup>

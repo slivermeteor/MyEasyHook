@@ -24,6 +24,15 @@
     <Filter Include="DriverShared\ASM">
       <UniqueIdentifier>{785c7237-24f9-4cdf-8419-25ed093a112c}</UniqueIdentifier>
     </Filter>
+    <Filter Include="LocalHook">
+      <UniqueIdentifier>{f4644ba7-af8c-426d-a4bb-3dff318d2f91}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="DriverShared\udis86">
+      <UniqueIdentifier>{24e4dfb0-ceb7-4c7d-9071-91d0fa9a318d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="DriverShared\udis86\libudis86">
+      <UniqueIdentifier>{b30efbc3-9c0e-440a-86c6-9d6cd3c7ba57}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <Text Include="ReadMe.txt" />
@@ -53,6 +62,33 @@
     <ClCompile Include="RemoteHook\Thread.c">
       <Filter>RemoteHook</Filter>
     </ClCompile>
+    <ClCompile Include="LocalHook\Alloc.c">
+      <Filter>LocalHook</Filter>
+    </ClCompile>
+    <ClCompile Include="LocalHook\Install.c">
+      <Filter>LocalHook</Filter>
+    </ClCompile>
+    <ClCompile Include="LocalHook\Reloc.c">
+      <Filter>LocalHook</Filter>
+    </ClCompile>
+    <ClCompile Include="..\DriverShared\udis86\libudis86\decode.c">
+      <Filter>DriverShared\udis86\libudis86</Filter>
+    </ClCompile>
+    <ClCompile Include="..\DriverShared\udis86\libudis86\itab.c">
+      <Filter>DriverShared\udis86\libudis86</Filter>
+    </ClCompile>
+    <ClCompile Include="..\DriverShared\udis86\libudis86\syn.c">
+      <Filter>DriverShared\udis86\libudis86</Filter>
+    </ClCompile>
+    <ClCompile Include="..\DriverShared\udis86\libudis86\syn-att.c">
+      <Filter>DriverShared\udis86\libudis86</Filter>
+    </ClCompile>
+    <ClCompile Include="..\DriverShared\udis86\libudis86\syn-intel.c">
+      <Filter>DriverShared\udis86\libudis86</Filter>
+    </ClCompile>
+    <ClCompile Include="..\DriverShared\udis86\libudis86\udis86.c">
+      <Filter>DriverShared\udis86\libudis86</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Public\EasyHook.h">
@@ -66,6 +102,9 @@
     </ClInclude>
     <ClInclude Include="..\DriverShared\Rtl\Rtl.h">
       <Filter>DriverShared\Rtl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\DriverShared\udis86\udis86.h">
+      <Filter>DriverShared\udis86</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

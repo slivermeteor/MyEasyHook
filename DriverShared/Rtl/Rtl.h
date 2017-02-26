@@ -23,8 +23,6 @@
 #define FORCE(expr)                 { if(!RTL_SUCCESS(NtStatus = (expr))) goto THROW_OUTRO; }
 #define IsValidPointer				RtlIsValidPointer
 
-
-
 // error.c
 void RtlSetLastError(LONG InCode, LONG InNtStatus, WCHAR* InMessage);
 BOOL RtlIsValidPointer(PVOID InPtr, ULONG InSize);
@@ -35,6 +33,9 @@ void RtlAssert(BOOL InAssert, LPCWSTR lpMessageText);
 // string.c
 ULONG32 RtlUnicodeLength(WCHAR* InString);
 ULONG32 RtlAnsiLength(CHAR* InString);
+LONG    RtlAnsiIndexOf(CHAR* InString, CHAR InChar);
+LONG    RtlAnsiSubString(PCHAR InString, ULONG InOffset, ULONG InCount, PCHAR InTarget, ULONG InTargetMaxLength);
+LONG64  RtlAnsiHexToLong64(const CHAR* str, INT Length);
 
 //memory.c
 #undef RtlZeroMemory
@@ -45,5 +46,6 @@ VOID RtlCopyMemory(PVOID InDest, PVOID InSource, ULONG32 InByteCount);
 
 VOID* RtlAllocateMemory(BOOL InZeroMemory, ULONG32 InSize);
 VOID RtlFreeMemory(PVOID InPointer);
+LONG RtlProtectMemory(PVOID InPointer, ULONG InSize, ULONG InNewProtection);
 
 #endif

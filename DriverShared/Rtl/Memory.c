@@ -1,3 +1,8 @@
+/*
+* EasyHookDll/DriverShared/Rtl/Memory.c
+* 函数声明在 EasyHookDll/DriverShared/Rtl/Rtl.h 下
+*/
+
 #include "common.h"
 
 BOOL RtlIsValidPointer(PVOID InPtr, ULONG InSize)
@@ -20,7 +25,7 @@ VOID RtlCopyMemory(PVOID InDest, PVOID InSource, ULONG32 InByteCount)
 	PUCHAR  Dest = (PUCHAR)InDest;
 	PUCHAR  Source = (PUCHAR)InSource;
 
-	for (int Index = 0; Index < InByteCount; Index++)
+	for (ULONG32 Index = 0; Index < InByteCount; Index++)
 	{
 		*Dest = *Source;
 
@@ -81,3 +86,21 @@ VOID RtlZeroMemory(PVOID InStart, ULONG32 InByteCount)
 #ifndef _DEBUG
 	#pragma optimize("", on)
 #endif
+
+LONG RtlProtectMemory(PVOID InPointer, ULONG InSize, ULONG InNewProtection)
+{
+	DWORD OldProtect = 0;
+	NTSTATUS NtStatus = STATUS_SUCCESS;
+
+	if (!VirtualProtect(InPointer, InSize, InNewProtection, &OldProtect))
+	{
+		THROW(STATUS_INVALID_PARAMETER, L"Unable To Change Page Property.");
+	}
+
+	RETURN;
+THROW_OUTRO:
+FINALLY_OUTRO:
+	{
+		return NtStatus;
+	}
+}
