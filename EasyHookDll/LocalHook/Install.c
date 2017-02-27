@@ -57,7 +57,8 @@ EASYHOOK_NT_INTERNAL LhAllocateHook(PVOID InEntryPoint, PVOID InHookProc, PVOID 
 #endif
 
 #ifndef _M_X64
-
+	ULONG	Index = 0;
+	PUCHAR  Ptr = NULL;
 #endif
 
 	
@@ -103,20 +104,21 @@ EASYHOOK_NT_INTERNAL LhAllocateHook(PVOID InEntryPoint, PVOID InHookProc, PVOID 
 #if !_M_X64
 	__pragma(warning(pop))
 #endif
-	// 结构体赋值 - 未完整
+	// 结构体赋值
 	LocalHookInfo->HookProc = InHookProc;
 	LocalHookInfo->TargetProc = InEntryPoint;
 	LocalHookInfo->EntrySize = EntrySize;
 	LocalHookInfo->CallBack = InCallBack;
-	//LocalHookInfo->IsExecutedPtr
+	LocalHookInfo->IsExecutedPtr = (PINT)((PUCHAR)LocalHookInfo + 2048);
+	*LocalHookInfo->IsExecutedPtr = 0;
 
 	/*
 	跳板将会调用下面两个函数在用户定义的hook函数被调用前。
 	它们将建立一个正确的环境给 fiber deadlock barrier 和 指定的回调函数
 	*/
 	// 未实现函数
-	//LocalHookInfo->HookIntro = LhBarrierIntro;
-	//LocalHookInfo->HookOutro = LhBarrierOutro;
+	LocalHookInfo->HookIntro = LhBarrierIntro;
+	LocalHookInfo->HookOutro = LhBarrierOutro;
 
 	// 拷贝跳转指令
 	LocalHookInfo->Trampoline = MemoryPtr; // MemoryPtr 是越过LocalHookInfo 也就是当前结构体的尾部
@@ -162,6 +164,7 @@ EASYHOOK_NT_INTERNAL LhAllocateHook(PVOID InEntryPoint, PVOID InHookProc, PVOID 
 
 #endif
 
+	// 备份一份目标地址
 	LocalHookInfo->TargetBackup = *((PULONG64)LocalHookInfo->TargetProc);
 
 #ifdef X64_DRIVER
@@ -170,7 +173,57 @@ EASYHOOK_NT_INTERNAL LhAllocateHook(PVOID InEntryPoint, PVOID InHookProc, PVOID 
 
 #ifndef _M_X64
 
+	// 替换ASM中原本的占位符 - 换成对应具体的地址值
+	Ptr = LocalHookInfo->Trampoline;
 
+	for (Index = 0; Index < GetTrampolineSize(); Index++)
+	{
+#pragma warning(disable:4311)	// 关闭截断警告
+		switch (*((PULONG32)Ptr))
+		{
+			case 0x1A2B3C05:	// LocalHookInfo
+			{
+				*((PULONG32)Ptr) = (ULONG32)LocalHookInfo;
+				break;
+			}
+			case 0x1A2B3C03:
+			{
+				*((ULONG*)Ptr) = (ULONG)LocalHookInfo->HookIntro;
+				break;
+			}
+			case 0x1A2B3C01:	// OldProc
+			{
+				*((PULONG32)Ptr) = (ULONG32)LocalHookInfo->OldProc;
+				break;
+			}
+			case 0x1A2B3C07:	// HookProc(Ptr)
+			{
+				*((PULONG32)Ptr) = (ULONG)&LocalHookInfo->HookProc;
+				break;
+			}
+			case 0x1A2B3C00:	// HookProc
+			{
+				*((PULONG32)Ptr) = (ULONG)LocalHookInfo->HookProc;
+				break;
+			}
+			case 0x1A2B3C06:	// UnmanagedOutro
+			{
+				*((PULONG32)Ptr) = (ULONG)LocalHookInfo->HookOutro;
+				break;
+			}
+			case 0x1A2B3C02:	// IsExecuted
+			{
+				*((PULONG32)Ptr) = (ULONG)LocalHookInfo->IsExecutedPtr;
+				break;
+			}
+			case 0x1A2B3C04:
+			{
+				*((PULONG32)Ptr) = (ULONG)(LocalHookInfo->Trampoline + 92);
+				break;
+			}
+		}
+		Ptr++;
+	}
 
 #endif
 

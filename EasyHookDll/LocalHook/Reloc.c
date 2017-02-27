@@ -208,7 +208,7 @@ EASYHOOK_NT_INTERNAL LhRelocateEntryPoint(PVOID InEntryPoint, ULONG InEPSize, PV
 				但是EasyHook采用的这种方法可以重复Hook同一个函数，就算有其它未知的Hook库来Hook EasyHook已经Hook的方法。
 				只有当EasyHook去Hook其它Hook库已经Hook的方法可能会引发不稳定的情况。特别是一些不稳定的库以及
 			*/
-			*OutRelocSize = (ULONG)(NewAddr - Buffer);
+			*OutRelocSize = (ULONG)(NewAddr - (PUCHAR)Buffer);
 		}
 		else
 		{	
@@ -241,7 +241,7 @@ EASYHOOK_NT_INTERNAL LhRelocateEntryPoint(PVOID InEntryPoint, ULONG InEPSize, PV
 	}
 
 	// 返回更变长度
-	*OutRelocSize = (ULONG)(NewAddr - Buffer);
+	*OutRelocSize = (ULONG)(NewAddr - (PUCHAR)Buffer);
 	RETURN;
 FINALLY_OUTRO:
 THROW_OUTRO:

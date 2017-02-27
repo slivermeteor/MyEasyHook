@@ -89,6 +89,9 @@
     <ClCompile Include="..\DriverShared\udis86\libudis86\udis86.c">
       <Filter>DriverShared\udis86\libudis86</Filter>
     </ClCompile>
+    <ClCompile Include="LocalHook\Barrier.c">
+      <Filter>LocalHook</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Public\EasyHook.h">

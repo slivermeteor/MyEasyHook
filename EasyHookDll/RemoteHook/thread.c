@@ -465,9 +465,9 @@ THROW_OUTRO:
 FINALLY_OUTRO:
 	if (TargetProcessHandle != NULL)
 	{
-		CloseHandle(TargetProcessHandle);
-		return NtStatus;
+		CloseHandle(TargetProcessHandle);	
 	}
+	return NtStatus;
 }
 
 EASYHOOK_NT_INTERNAL NtForceLdrInitializeThunk(HANDLE ProcessHandle)

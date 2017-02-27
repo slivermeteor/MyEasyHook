@@ -24,6 +24,11 @@ typedef struct _LOCAL_HOOK_INFO_
 
 	PVOID			 RandomValue;
 	PVOID			 OldProc;			// 指向原代码
+
+	PVOID			HookIntro;			// 运行环境初始化函数
+	PVOID			HookOutro;			// 运行环境初始化函数
+
+	INT*			IsExecutedPtr;		// ?
 }LOCAL_HOOK_INFO, *PLOCAL_HOOK_INFO;
 
 //EasyHookDll/LocalHook/reloc.c 内部函数 - udis86
@@ -32,6 +37,10 @@ EASYHOOK_NT_INTERNAL LhGetInstructionLength(PVOID InPtr, PULONG OutLength);
 EASYHOOK_NT_INTERNAL LhRelocateEntryPoint(PVOID InEntryPoint, ULONG InEPSize, PVOID Buffer, PULONG OutRelocSize);
 EASYHOOK_NT_INTERNAL LhRelocateRIPRelativeInstruction(ULONGLONG InOffset, ULONGLONG InTargetOffset, PBOOL OutWasRelocated);
 EASYHOOK_NT_INTERNAL LhDisassembleInstruction(PVOID InPtr, PULONG Length, PSTR Buffer, LONG BufferSize, PULONG64 NextInstr);
+
+// EasyHookDll/LocalHook/Barrier.c
+BOOL IsLoaderLock();
+
 
 // EasyHookDll/LocalHook/alloc.c 内部函数
 PVOID LhAllocateMemoryEx(PVOID InEntryPoint, PULONG OutPageSize);

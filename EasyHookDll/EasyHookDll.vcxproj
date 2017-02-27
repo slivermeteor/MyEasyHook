@@ -182,6 +182,7 @@
       </PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="LocalHook\Alloc.c" />
+    <ClCompile Include="LocalHook\Barrier.c" />
     <ClCompile Include="LocalHook\Install.c" />
     <ClCompile Include="LocalHook\Reloc.c" />
     <ClCompile Include="RemoteHook\Entry.cpp" />
