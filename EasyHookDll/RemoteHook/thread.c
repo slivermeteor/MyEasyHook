@@ -175,7 +175,7 @@ EASYHOOK_NT_API RhInjectLibrary(INT32 TargetProcessID, INT32 WakeUpThreadID, INT
 	RemoteInfo->HostProcessID = GetCurrentProcessId();
 	RemoteInfo->UserDataSize = 0;
 
-	Offset += UserInjectLibraryLength;	//  结构体和字符串尾部 - 也就是在当前进程空间申请空间的尾部
+	Offset += UserInjectLibraryLength;	// 结构体和字符串尾部 - 也就是在当前进程空间申请空间的尾部
 
 	if ((ULONG)(Offset - (PBYTE)RemoteInfo) > RemoteInfo->Size)
 	{

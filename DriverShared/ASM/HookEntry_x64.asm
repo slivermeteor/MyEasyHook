@@ -16,7 +16,7 @@ StealthStub_ASM_x64 PROC
 	mov			r8, qword ptr [rbx + 8]		; RemoteThreadStart
 	mov			rdx, 0
 	mov			rcx, 0
-	call		qword ptr[rbx]				; CreateThread
+	call		qword ptr[rbx]				; CreateThread(0, 0, RemoteThreadStart, RemoteThreadParam, 0, 0);
 	cmp			rax, 0
 	
 	; recover the stack data - 恢复栈旧值
@@ -28,25 +28,25 @@ StealthStub_ASM_x64 PROC
 	mov			rcx, qword ptr [rbx + 64 + 8 * 19]
 	mov			qword ptr [rdx], rcx
 
-; signal completion 通知原函数 创建成功
+	; signal completion - 通知原函数 创建成功
 	mov			rcx, qword ptr [rbx + 48]	; 把SynchronEventHandle取出来	
 	mov			qword ptr [rbx + 48], rax	; 保存创建的远程线程句柄
 	call		qword ptr [rbx + 56]		; SetEvent(hSyncEvent);
 
-; wait for completion 等待原函数Duplicate远程线程句柄
+	; wait for completion 等待原函数Duplicate远程线程句柄
 	mov			rdx, -1
 	mov			rcx, qword ptr [rbx + 32]
 	call		qword ptr [rbx + 24]		; WaitForSingleObject(hCompletionEvent, INFINITE)	
 
-; close handle  关闭所有句柄·
+	; close handle  关闭所有句柄·
 	mov			rcx, qword ptr [rbx + 32]		
 	call		qword ptr [rbx + 40]		; CloseHandle(hCompletionEvent);
 	
-; close handle  
+	; close handle  
 	mov			rcx, qword ptr [rbx + 48]		
 	call		qword ptr [rbx + 40]		; CloseHandle(hSyncEvent);
 	
-; restore context 恢复 Context
+	; restore context 恢复 Context
 	mov			rax, [rbx + 64 + 8 * 0]
 	mov			rcx, [rbx + 64 + 8 * 1]
 	mov			rdx, [rbx + 64 + 8 * 2]
@@ -69,10 +69,10 @@ StealthStub_ASM_x64 PROC
 	add			rsp, 8  ; 抵消一次上面的push 下面popfq再抵消一次
 	popfq		; POPFQ pops 64 bits from the stack, loads the lower 32 bits into RFLAGS, and zero extends the upper bits of RFLAGS.
 
-; continue execution...
+	; continue execution...
 	jmp			qword ptr [rsp - 16]  ; 将rsp恢复为旧rsp后，上面又是两次push。保存的EIP的是第二次 所以rsp-16 就是保存的rip值
 	
-; outro signature, to automatically determine code size -  硬编码 用户获得ASM-CODE 长度
+	; outro signature, to automatically determine code size -  硬编码 用户获得ASM-CODE 长度
 	db 78h
 	db 56h
 	db 34h
@@ -86,7 +86,7 @@ public Injection_ASM_x64
 Injection_ASM_x64 PROC
 ; no registers to save, because this is the thread main function
 	mov         r14, rcx ; save parameter to non-volatile register
-	sub         rsp, 40  ; space for register parameter stack, should be 32 bytes... no idea why it only works with 40
+	sub         rsp, 40  ; x64函数开栈，子函数最多参数为4，4*8 = 32，已经对16位对齐，再加上8 对齐 ReturnAddress
 						 ; 函数开栈
 	
 ; call LoadLibraryW(Inject->EasyHookPath); 加载EasyHookDll64
@@ -130,7 +130,7 @@ HookInject_FAILURE_C:
 	or			rax, 30000000h
 	jmp			HookInject_FAILURE_E	
 HookInject_FAILURE_E:
-	mov			r15, rax ; save error value
+	mov			r15, rax ; 保存错误值
 	
 HookInject_EXIT:
 
@@ -153,6 +153,7 @@ HookInject_EXIT:
 		call		qword ptr [r14 + 80] ; ExitThread
 		
 HookInject_EXECUTABLE:
+; 为啥要在栈区里执行 - 因为在栈区才可以释放申请的代码段，不可能在代码段申请释放自己。释放完成后，再退出线程，自动清理栈区。不留任何痕迹。
 ; save outro to executable stack -  rbx,rbp 写入函数地址
 	mov			rbx, [r14 + 64] 		; VirtualFree()
 	mov			rbp, [r14 + 80] 		; ExitThread()

@@ -23,21 +23,33 @@
 #define FORCE(expr)                 { if(!RTL_SUCCESS(NtStatus = (expr))) goto THROW_OUTRO; }
 #define IsValidPointer				RtlIsValidPointer
 
-// error.c
+// Barrier.c 
+#ifdef DRIVER
+
+#else
+typedef struct _RTL_SPIN_LOCK_
+{
+	CRITICAL_SECTION	Lock;
+	BOOL				IsOwned;
+}RTL_SPIN_LOCK, *PRTL_SPIN_LOCK;
+
+#endif
+
+// Error.c
 void RtlSetLastError(LONG InCode, LONG InNtStatus, WCHAR* InMessage);
 BOOL RtlIsValidPointer(PVOID InPtr, ULONG InSize);
 #ifndef DRIVER
 void RtlAssert(BOOL InAssert, LPCWSTR lpMessageText);
 #endif
 
-// string.c
+// String.c
 ULONG32 RtlUnicodeLength(WCHAR* InString);
 ULONG32 RtlAnsiLength(CHAR* InString);
 LONG    RtlAnsiIndexOf(CHAR* InString, CHAR InChar);
 LONG    RtlAnsiSubString(PCHAR InString, ULONG InOffset, ULONG InCount, PCHAR InTarget, ULONG InTargetMaxLength);
 LONG64  RtlAnsiHexToLong64(const CHAR* str, INT Length);
 
-//memory.c
+// Memory.c
 #undef RtlZeroMemory
 VOID RtlZeroMemory(PVOID InStart, ULONG32 InByteCount);
 
@@ -47,5 +59,8 @@ VOID RtlCopyMemory(PVOID InDest, PVOID InSource, ULONG32 InByteCount);
 VOID* RtlAllocateMemory(BOOL InZeroMemory, ULONG32 InSize);
 VOID RtlFreeMemory(PVOID InPointer);
 LONG RtlProtectMemory(PVOID InPointer, ULONG InSize, ULONG InNewProtection);
+
+VOID RtlAcquireLock(PRTL_SPIN_LOCK InLock);
+VOID RtlReleaseLock(PRTL_SPIN_LOCK InLock);
 
 #endif

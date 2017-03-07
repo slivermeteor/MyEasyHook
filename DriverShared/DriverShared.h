@@ -17,6 +17,9 @@ typedef struct _LOCAL_HOOK_INFO_
 	PVOID			 TargetProc;		// 被Hook函数
 	ULONG64			 TargetBackup;	    // 目标备份函数
 	PVOID			 Trampoline;
+	ULONG			 HLSIndex;
+	ULONG			 HLSIdent;
+
 	PVOID			 HookProc;			// 实际Hook函数
 	
 	ULONG			 EntrySize;
@@ -31,6 +34,13 @@ typedef struct _LOCAL_HOOK_INFO_
 	INT*			IsExecutedPtr;		// ?
 }LOCAL_HOOK_INFO, *PLOCAL_HOOK_INFO;
 
+typedef struct _HOOK_ACL_
+{
+	ULONG		    Count;
+	BOOL			IsExclusive;
+	ULONG			Entries[MAX_ACE_COUNT];
+}HOOK_ACL, *PHOOK_ACL;
+
 //EasyHookDll/LocalHook/reloc.c 内部函数 - udis86
 EASYHOOK_NT_INTERNAL LhRoundToNextInstruction(PVOID InCodePtr, ULONG InCodeSize, PULONG OutOffset);
 EASYHOOK_NT_INTERNAL LhGetInstructionLength(PVOID InPtr, PULONG OutLength);
@@ -40,6 +50,9 @@ EASYHOOK_NT_INTERNAL LhDisassembleInstruction(PVOID InPtr, PULONG Length, PSTR B
 
 // EasyHookDll/LocalHook/Barrier.c
 BOOL IsLoaderLock();
+BOOL TlsGetCurrentValue(THREAD_LOCAL_STORAGE* InTls, PTHREAD_RUNTIME_INFO* OutValue);
+BOOL TlsAddCurrentThread(THREAD_LOCAL_STORAGE* InTls);
+BOOL AcquireSelfProtection();
 
 
 // EasyHookDll/LocalHook/alloc.c 内部函数

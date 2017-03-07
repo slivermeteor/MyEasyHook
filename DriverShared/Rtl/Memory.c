@@ -104,3 +104,23 @@ FINALLY_OUTRO:
 		return NtStatus;
 	}
 }
+
+VOID RtlAcquireLock(PRTL_SPIN_LOCK InLock)
+{
+	EnterCriticalSection(&InLock->Lock);
+
+	// 如果已经有人进入临界区 - 说明发生了死锁 触发断言
+	ASSERT(!InLock->IsOwned, L"Memory.c - !InLock->IsOwned");
+
+	InLock->IsOwned = TRUE;
+}
+
+VOID RtlReleaseLock(PRTL_SPIN_LOCK InLock)
+{
+	// 如果没有进入临界区 - 异常 触发断言
+	ASSERT(InLock->IsOwned, L"Memory.c - !InLock->IsOwned");
+
+	InLock->IsOwned = FALSE;
+
+	LeaveCriticalSection(&InLock->Lock);
+}
