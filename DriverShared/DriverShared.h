@@ -48,11 +48,7 @@ EASYHOOK_NT_INTERNAL LhRelocateEntryPoint(PVOID InEntryPoint, ULONG InEPSize, PV
 EASYHOOK_NT_INTERNAL LhRelocateRIPRelativeInstruction(ULONGLONG InOffset, ULONGLONG InTargetOffset, PBOOL OutWasRelocated);
 EASYHOOK_NT_INTERNAL LhDisassembleInstruction(PVOID InPtr, PULONG Length, PSTR Buffer, LONG BufferSize, PULONG64 NextInstr);
 
-// EasyHookDll/LocalHook/Barrier.c
-BOOL IsLoaderLock();
-BOOL TlsGetCurrentValue(THREAD_LOCAL_STORAGE* InTls, PTHREAD_RUNTIME_INFO* OutValue);
-BOOL TlsAddCurrentThread(THREAD_LOCAL_STORAGE* InTls);
-BOOL AcquireSelfProtection();
+
 
 
 // EasyHookDll/LocalHook/alloc.c ÄÚ²¿º¯Êý

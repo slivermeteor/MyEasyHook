@@ -4,20 +4,22 @@
 #include <aux_ulib.h>
 #endif
 
+#pragma comment(lib, "Aux_ulib.lib")
+
 typedef struct _RUNTIME_INFO_
 {
-    BOOL    IsExecuting;   // TRUE - 如果当前线程在相关联的Hook句柄里面
-    DWORD   HLSIdent;      // 
-    PVOID   RetAddress;    //     
-    PVOID*  AddrOfRetAddr; // Hook返回代码的返回地址 ？
+	BOOL    IsExecuting;   // TRUE - 如果当前线程在相关联的Hook句柄里面
+	DWORD   HLSIdent;      // 
+	PVOID   RetAddress;    //     
+	PVOID*  AddrOfRetAddr; // Hook返回代码的返回地址 ？
 }RUNTIME_INFO, *PRUNTIME_INFO;
 
 typedef struct _THREAD_RUNTIME_INFO_
 {
-    PRUNTIME_INFO Entries;
-    PRUNTIME_INFO Current;
-    PVOID         CallBack;
-    BOOL          IsProtected;
+	PRUNTIME_INFO Entries;
+	PRUNTIME_INFO Current;
+	PVOID         CallBack;
+	BOOL          IsProtected;
 }THREAD_RUNTIME_INFO, *PTHREAD_RUNTIME_INFO;
 
 typedef struct _THREAD_LOCAL_STORAGE_
@@ -34,7 +36,15 @@ typedef struct _BARRIER_UNIT_
 	THREAD_LOCAL_STORAGE TLS;
 }BARRIER_UNIT, *PBARRIER_UNIT;
 
+
 static BARRIER_UNIT BarrierUnit;
+
+// EasyHookDll/LocalHook/Barrier.c
+BOOL IsLoaderLock();
+BOOL TlsGetCurrentValue(THREAD_LOCAL_STORAGE* InTls, PTHREAD_RUNTIME_INFO* OutValue);
+BOOL TlsAddCurrentThread(THREAD_LOCAL_STORAGE* InTls);
+BOOL AcquireSelfProtection();
+
 
 // TrampolineASM 调用 - 初始化函数
 ULONG64 LhBarrierIntro(LOCAL_HOOK_INFO* InHandle, PVOID InRetAddr, PVOID* InAddrOfRetAddr)
@@ -110,7 +120,7 @@ ULONG64 LhBarrierIntro(LOCAL_HOOK_INFO* InHandle, PVOID InRetAddr, PVOID* InAddr
 
 	// ?
 #ifndef DRIVER
-	RuntimeInfo->IsExecuting = IsThreadIntercepted(&InHandle->LocalACL, GetCurrentThreadId());
+	//RuntimeInfo->IsExecuting = IsThreadIntercepted(&InHandle->LocalACL, GetCurrentThreadId());
 #else
 
 #endif
@@ -118,6 +128,9 @@ ULONG64 LhBarrierIntro(LOCAL_HOOK_INFO* InHandle, PVOID InRetAddr, PVOID* InAddr
 
 
 DONT_INTERCEPT:
+	{
+		return 0;
+	}
 
 }
 

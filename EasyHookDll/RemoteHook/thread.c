@@ -21,7 +21,7 @@ EASYHOOK_NT_API RhInjectLibrary(INT32 TargetProcessID, INT32 WakeUpThreadID, INT
 
 	PREMOTE_INFOR RemoteInfo = NULL;
 	PREMOTE_INFOR CorrectRemoteInfo = NULL;
-	ULONG32  RemoteInfoLength = 0;
+	ULONG32   RemoteInfoLength = 0;
 	ULONG_PTR CorrectValue = 0;
 
 	HANDLE	 RemoteThreadHandle = NULL;

@@ -32,7 +32,6 @@ typedef struct _RTL_SPIN_LOCK_
 	CRITICAL_SECTION	Lock;
 	BOOL				IsOwned;
 }RTL_SPIN_LOCK, *PRTL_SPIN_LOCK;
-
 #endif
 
 // Error.c

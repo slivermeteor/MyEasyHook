@@ -2,13 +2,7 @@
 
 public StealthStub_ASM_x64
 StealthStub_ASM_x64 PROC
-	sub			rsp, 8 * 4  
-	
-	; to save the old stack data - 保存栈旧值
-	mov			r10, qword ptr[rsp + 40]
-	mov			qword ptr [rbx + 64 + 8 * 19], r10
-	mov			r10 , qword ptr[rsp + 32]
-	mov			qword ptr [rbx + 64 + 8 * 18], r10
+	sub			rsp, 8 * 6  			    ; 栈区开够 - CreateThread 一共有6参 48肯定够
 	
 	mov			qword ptr[rsp + 40], 0		; this code will cover the old stack data, we should sava it before call CreateThread
 	mov			qword ptr[rsp + 32], 0		; 这两步会覆盖原栈的值，我们需要提前保存值
@@ -19,15 +13,6 @@ StealthStub_ASM_x64 PROC
 	call		qword ptr[rbx]				; CreateThread(0, 0, RemoteThreadStart, RemoteThreadParam, 0, 0);
 	cmp			rax, 0
 	
-	; recover the stack data - 恢复栈旧值
-	mov   		rdx, rsp;
-	add			rdx, 20h
-	mov			rcx, qword ptr [rbx + 64 + 8 * 18]
-	mov			qword ptr [rdx], rcx
-	add			rdx, 8
-	mov			rcx, qword ptr [rbx + 64 + 8 * 19]
-	mov			qword ptr [rdx], rcx
-
 	; signal completion - 通知原函数 创建成功
 	mov			rcx, qword ptr [rbx + 48]	; 把SynchronEventHandle取出来	
 	mov			qword ptr [rbx + 48], rax	; 保存创建的远程线程句柄

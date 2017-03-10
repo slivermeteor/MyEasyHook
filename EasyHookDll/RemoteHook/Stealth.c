@@ -46,8 +46,6 @@ typedef struct _STEALTH_CONTEXT_
 	ULONG64		R13;
 	ULONG64		R14;
 	ULONG64		R15;	// 17 
-	ULONG64     StackOne; // 18
-	ULONG64		StackTwo; // 19
 }STEALTH_CONTEXT, *PSTEALTH_CONTEXT;
 
 ULONG32 GetStealthStubSize();

@@ -98,7 +98,7 @@ EASYHOOK_NT_INTERNAL LhAllocateHook(PVOID InEntryPoint, PVOID InHookProc, PVOID 
 #if !_M_X64
 	// 32位对初始化截断警告的关闭 - 为了与64位共用一份代码
 	__pragma(warning(push))
-	__pragma(warning(disbale:4305))
+	__pragma(warning(disable:4305))
 #endif
 	LocalHookInfo->RandomValue = (PVOID)0x69FAB7309CB312EF;
 #if !_M_X64
@@ -117,8 +117,8 @@ EASYHOOK_NT_INTERNAL LhAllocateHook(PVOID InEntryPoint, PVOID InHookProc, PVOID 
 	它们将建立一个正确的环境给 fiber deadlock barrier 和 指定的回调函数
 	*/
 	// 未实现函数
-	LocalHookInfo->HookIntro = LhBarrierIntro;
-	LocalHookInfo->HookOutro = LhBarrierOutro;
+	//LocalHookInfo->HookIntro = LhBarrierIntro;
+	//LocalHookInfo->HookOutro = LhBarrierOutro;
 
 	// 拷贝跳转指令
 	LocalHookInfo->Trampoline = MemoryPtr; // MemoryPtr 是越过LocalHookInfo 也就是当前结构体的尾部
@@ -218,7 +218,7 @@ EASYHOOK_NT_INTERNAL LhAllocateHook(PVOID InEntryPoint, PVOID InHookProc, PVOID 
 			}
 			case 0x1A2B3C04:
 			{
-				*((PULONG32)Ptr) = (ULONG)(LocalHookInfo->Trampoline + 92);
+				*((PULONG32)Ptr) = (ULONG)((ULONG_PTR)LocalHookInfo->Trampoline + 92);
 				break;
 			}
 		}
