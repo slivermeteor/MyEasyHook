@@ -124,3 +124,17 @@ VOID RtlReleaseLock(PRTL_SPIN_LOCK InLock)
 
 	LeaveCriticalSection(&InLock->Lock);
 }
+
+void RtlDeleteLock(RTL_SPIN_LOCK* InLock)
+{
+	ASSERT(!InLock->IsOwned, L"Memory.c - InLock->IsOwned");
+
+	DeleteCriticalSection(&InLock->Lock);
+}
+
+void RtlInitializeLock(RTL_SPIN_LOCK* OutLock)
+{
+	RtlZeroMemory(OutLock, sizeof(RTL_SPIN_LOCK));
+
+	InitializeCriticalSection(&OutLock->Lock);
+}

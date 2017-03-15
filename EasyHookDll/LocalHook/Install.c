@@ -4,12 +4,38 @@
 PVOID GetTrampolinePtr();
 LONG GetTrampolineSize();
 
+// 全局Hook链表
+LOCAL_HOOK_INFO GlobalHookListHead;
+// 全局已经移除Hook链表
+LOCAL_HOOK_INFO GlobalRemovalListHead;
+RTL_SPIN_LOCK GlobalHookLock;
+ULONG		  GlobalSlotList[MAX_HOOK_COUNT] = { 0 };
+
+static ULONG HLSCounter = 0x10000000;
+
+
+void LhCriticalInitialize()
+{
+	RtlZeroMemory(&GlobalHookListHead, sizeof(GlobalHookListHead));
+	RtlZeroMemory(&GlobalRemovalListHead, sizeof(GlobalRemovalListHead));
+
+	RtlInitializeLock(&GlobalHookLock);
+}
+
+// 最大可以用来跳转的地址长度 
+// 一般是8字节，但是在64位驱动下是16字节
+#define MAX_JMP_SIZE 16
+
 EASYHOOK_NT_API  LnInstallHook(PVOID InEntryPoint, PVOID InHookProc, PVOID InCallBack, TRACED_HOOK_HANDLE OutTracedHookHandle)
 {
+	BOOL     Exists = FALSE;
+	ULONG	 RelocSize = 0;
+	LONG64	 RelOffset = 0;
 	NTSTATUS NtStatus = STATUS_SUCCESS;
 	PLOCAL_HOOK_INFO  LocalHookInfo = NULL;
-	ULONG	RelocSize = 0;
-
+	// 跳转汇编硬编码 
+	UCHAR    Jumper[MAX_JMP_SIZE] = { 0xE9, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+	ULONG64  EntrySave = 0;
 
 	// 参数检查
 	if (!IsValidPointer(InEntryPoint, 1))
@@ -29,18 +55,90 @@ EASYHOOK_NT_API  LnInstallHook(PVOID InEntryPoint, PVOID InHookProc, PVOID InCal
 		THROW(STATUS_INVALID_PARAMETER_4, L"The Given Hook Trace Handle Seems To Already By Associated With A Hook.");
 	}
 
-	// 申请钩子 准本hook 存根
+	// 申请钩子 准备跳转函数 - Hook存根函数 - 核心函数
 	FORCE(LhAllocateHook(InEntryPoint, InHookProc, InCallBack, &LocalHookInfo, &RelocSize));
 
-THROW_OUTRO:
+#ifdef X64_DRIVER
+
+
+#else
+	// 计算实际跳转偏移距离
+	RelOffset = (LONG64)LocalHookInfo->Trampoline - ((LONG64)LocalHookInfo->TargetProc + 5);	// TargetProc 放入 E9 + Offset(4字节) - 所以跳转的起始地址是 TargetProc + 5
+	if (RelOffset != (LONG)RelOffset)	// 入口实际偏移超出了31位
+		THROW(STATUS_NOT_SUPPORTED , L"The Given Entry Point Is Out Of Reach.");
+
+	// 复制偏移
+	RtlCopyMemory(Jumper + 1, &RelOffset, 4);
+	// 修改入口页面保护属性
+	FORCE(RtlProtectMemory(LocalHookInfo->TargetProc, LocalHookInfo->EntrySize, PAGE_EXECUTE_READWRITE));
+#endif
+
+	// 记录信息
+	RtlAcquireLock(&GlobalHookLock);
 	{
+		LocalHookInfo->HLSIdent = HLSCounter++;
+		Exists = FALSE;
+
+		// 在 GlobalSlotList 中记录当前 HLS - 并且在LocalHookInfo里设置对应的Index
+		for (LONG Index = 0; Index < MAX_HOOK_COUNT; Index++)
+		{
+			if (GlobalSlotList[Index] == 0)
+			{
+				GlobalSlotList[Index] = LocalHookInfo->HLSIdent;
+				LocalHookInfo->HLSIndex = Index;
+				Exists = TRUE;
+
+				break;
+			}
+		}
+	}
+	RtlReleaseLock(&GlobalHookLock);
+	// 如果注册失败
+	if (!Exists)
+		THROW(STATUS_INSUFFICIENT_RESOURCES, L"Not more than MAX_HOOK_COUNT hooks are supported simultaneously.");
+
+#ifdef X64_DRIVER
+
+#else
+
+	// 保留原本的入口代码 - 5字节
+	EntrySave = *((ULONG64*)LocalHookInfo->TargetProc);
+	{
+		RtlCopyMemory(&EntrySave, Jumper, 5);
+
+		// 备份原代码
+		LocalHookInfo->HookOldSave = EntrySave;
+	}
+	*((ULONG64*)LocalHookInfo->TargetProc) = EntrySave;
+
+#endif
+
+	// 添加 当前Hook信息到全局Hook链表和返回句柄
+	RtlAcquireLock(&GlobalHookLock);
+	{
+		LocalHookInfo->Next = GlobalHookListHead.Next;
+		GlobalHookListHead.Next = LocalHookInfo;
+	}
+	RtlReleaseLock(&GlobalHookLock);
+
+	LocalHookInfo->Signature = LOCAL_HOOK_SIGNATURE;
+	LocalHookInfo->Tracking = OutTracedHookHandle;	// 记录
+	OutTracedHookHandle->Link = LocalHookInfo;
+
+	RETURN(STATUS_SUCCESS);
+
+THROW_OUTRO:
+FINALLY_OUTRO:
+	{
+		if (!RTL_SUCCESS(NtStatus))
+		{
+			if (LocalHookInfo != NULL)
+				LhFreeMemory(&LocalHookInfo);
+		}
 		return NtStatus;
 	}
 }
 
-// 最大可以用来跳转的地址长度 
-// 一般是8字节，但是在64位驱动下是16字节
-#define MAX_JMP_SIZE 16
 
 EASYHOOK_NT_INTERNAL LhAllocateHook(PVOID InEntryPoint, PVOID InHookProc, PVOID InCallBack, PLOCAL_HOOK_INFO* OutLocalHookInfo, PULONG RelocSize)
 {
@@ -57,7 +155,7 @@ EASYHOOK_NT_INTERNAL LhAllocateHook(PVOID InEntryPoint, PVOID InHookProc, PVOID 
 #endif
 
 #ifndef _M_X64
-	ULONG	Index = 0;
+	LONG	Index = 0;
 	PUCHAR  Ptr = NULL;
 #endif
 
@@ -90,10 +188,11 @@ EASYHOOK_NT_INTERNAL LhAllocateHook(PVOID InEntryPoint, PVOID InHookProc, PVOID 
 #ifdef X64_DRIVER
 	FORCE(EntrySize = LhRoundToNextInstruction(InEntryPoint, X64_DRIVER_JMPSIZE));
 #else
-	// HookProc 得到第一条尾偏移大于5的指令的尾偏移 == 第一条偏移大于5的指令的偏移-1
+	// HookProc 得到第一条尾偏移大于5的指令的尾偏移 == 第一条偏移大于5的指令的偏移
 	FORCE(LhRoundToNextInstruction(InEntryPoint, 5, &EntrySize));
 #endif
 
+	// 开始结构体赋值
 	LocalHookInfo->Size = sizeof(LOCAL_HOOK_INFO);
 #if !_M_X64
 	// 32位对初始化截断警告的关闭 - 为了与64位共用一份代码
@@ -109,15 +208,15 @@ EASYHOOK_NT_INTERNAL LhAllocateHook(PVOID InEntryPoint, PVOID InHookProc, PVOID 
 	LocalHookInfo->TargetProc = InEntryPoint;
 	LocalHookInfo->EntrySize = EntrySize;
 	LocalHookInfo->CallBack = InCallBack;
-	LocalHookInfo->IsExecutedPtr = (PINT)((PUCHAR)LocalHookInfo + 2048);
+	LocalHookInfo->IsExecutedPtr = (PINT)((PUCHAR)LocalHookInfo + 2048);		// 在申请页面(0x1000)偏移为2048的地方
 	*LocalHookInfo->IsExecutedPtr = 0;
 
 	/*
 	跳板将会调用下面两个函数在用户定义的hook函数被调用前。
-	它们将建立一个正确的环境给 fiber deadlock barrier 和 指定的回调函数
+	其中Intro判断ACL - 决定是否执行Hook函数
 	*/
 	// 未实现函数
-	//LocalHookInfo->HookIntro = LhBarrierIntro;
+	LocalHookInfo->HookIntro = LhBarrierIntro;
 	//LocalHookInfo->HookOutro = LhBarrierOutro;
 
 	// 拷贝跳转指令
@@ -125,7 +224,7 @@ EASYHOOK_NT_INTERNAL LhAllocateHook(PVOID InEntryPoint, PVOID InHookProc, PVOID 
 	MemoryPtr += GetTrampolineSize();	   // LOCAL_HOOK_INFO | TrampolineASM | 
 										   //							      ↑ MemoryPtr
 
-	LocalHookInfo->Size += GetTrampolineSize();
+	LocalHookInfo->Size += GetTrampolineSize();	// 长度更新
 
 	// 拷贝 Trampoline asm汇编代码
 	RtlCopyMemory(LocalHookInfo->Trampoline, GetTrampolinePtr(), GetTrampolineSize());
@@ -140,16 +239,18 @@ EASYHOOK_NT_INTERNAL LhAllocateHook(PVOID InEntryPoint, PVOID InHookProc, PVOID 
 
 	FORCE(LhRelocateEntryPoint(LocalHookInfo->TargetProc, EntrySize, LocalHookInfo->OldProc, RelocSize));
 	// 确保空间还是足够
-	MemoryPtr += (*RelocSize + MAX_JMP_SIZE);
-	LocalHookInfo->Size += (*RelocSize + MAX_JMP_SIZE);
+	MemoryPtr += (*RelocSize + MAX_JMP_SIZE);		// LOCAL_HOOK_INFO | TrampolineASM |  Old Proc |
+													//							       | EntrySize |↑ MemoryPtr
+	LocalHookInfo->Size += (*RelocSize + MAX_JMP_SIZE);	// 留够足够空间
 
 	// 添加跳转代码到新的入口代码后面
 #ifdef X64_DRIVER
 
 
 #else
-	// TargetProc + EntrySize : 目标函数地址+入口指令地址
-	// OldProc(新用于放原函数的地址) + *RelocSize(对首指令进行变化后的指令长度) + 5 : 
+	// 计算偏移 - 原本函数入口(越过入口代码) 跳转到 旧入口代码保存地址
+	// TargetProc + EntrySize : 目标函数地址+入口指令地址													
+	// OldProc(用于放原函数的地址) + *RelocSize(对原入口代码进行变化后的指令长度) + 5 : 
 	RelAddr = (LONG64)((PUCHAR)LocalHookInfo->TargetProc + LocalHookInfo->EntrySize) - ((LONG64)LocalHookInfo->OldProc + *RelocSize + 5);
 
 	// 偏移有没有查过32位
@@ -158,13 +259,14 @@ EASYHOOK_NT_INTERNAL LhAllocateHook(PVOID InEntryPoint, PVOID InHookProc, PVOID 
 		THROW(STATUS_NOT_SUPPORTED, L"The Given Entry Point Is Out Of Reach.");
 	}
 
+	// 写入跳转指令 - 执行完原本的入口代码，跳回原函数
 	((PUCHAR)LocalHookInfo->OldProc)[*RelocSize] = 0xE9;
 
 	RtlCopyMemory((PUCHAR)LocalHookInfo->OldProc + *RelocSize + 1, &RelAddr, 4);
 
 #endif
 
-	// 备份一份目标地址
+	// 备份一份 被Hook函数入口的8字节
 	LocalHookInfo->TargetBackup = *((PULONG64)LocalHookInfo->TargetProc);
 
 #ifdef X64_DRIVER
@@ -172,7 +274,7 @@ EASYHOOK_NT_INTERNAL LhAllocateHook(PVOID InEntryPoint, PVOID InHookProc, PVOID 
 #endif
 
 #ifndef _M_X64
-
+	// 32bit-asm 需要我们写入实际操作的地址
 	// 替换ASM中原本的占位符 - 换成对应具体的地址值
 	Ptr = LocalHookInfo->Trampoline;
 
@@ -186,7 +288,7 @@ EASYHOOK_NT_INTERNAL LhAllocateHook(PVOID InEntryPoint, PVOID InHookProc, PVOID 
 				*((PULONG32)Ptr) = (ULONG32)LocalHookInfo;
 				break;
 			}
-			case 0x1A2B3C03:
+			case 0x1A2B3C03:	// NETEntry
 			{
 				*((ULONG*)Ptr) = (ULONG)LocalHookInfo->HookIntro;
 				break;
@@ -216,7 +318,7 @@ EASYHOOK_NT_INTERNAL LhAllocateHook(PVOID InEntryPoint, PVOID InHookProc, PVOID 
 				*((PULONG32)Ptr) = (ULONG)LocalHookInfo->IsExecutedPtr;
 				break;
 			}
-			case 0x1A2B3C04:
+			case 0x1A2B3C04:	// RetAddr
 			{
 				*((PULONG32)Ptr) = (ULONG)((ULONG_PTR)LocalHookInfo->Trampoline + 92);
 				break;
@@ -298,4 +400,32 @@ LONG GetTrampolineSize()
 	ASSERT(FALSE, L"install.c - ULONG GetTrampolineSize()");
 
 	return 0;
+}
+
+// 判断传入的句柄是否合理
+EASYHOOK_BOOL_INTERNAL LhIsValidHandle(TRACED_HOOK_HANDLE InTracedHandle, PLOCAL_HOOK_INFO* OutHandle)
+{
+	// 判断标准 - 结构体指针指向有效地址，标志位有效，毕竟已经安装Hook
+	if (!IsValidPointer(InTracedHandle, sizeof(HOOK_TRACE_INFO)))
+		return FALSE;
+
+	// LOCAL_HOOK_INFO 完整吗?
+	if (!IsValidPointer(InTracedHandle->Link, sizeof(LOCAL_HOOK_INFO)))
+		return FALSE;
+
+	if (InTracedHandle->Link->Signature != LOCAL_HOOK_SIGNATURE)
+		return FALSE;
+
+	// 后面的ShellCode完整吗?
+	if (!IsValidPointer(InTracedHandle->Link, InTracedHandle->Link->Size))
+		return FALSE;
+
+	// Hook了吗?
+	if (InTracedHandle->Link->HookProc == NULL)
+		return FALSE;
+
+	if (OutHandle != NULL)
+		*OutHandle = InTracedHandle->Link;
+
+	return TRUE;
 }

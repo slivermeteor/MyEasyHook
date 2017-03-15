@@ -19,6 +19,10 @@ BOOL RtlFileExists(WCHAR* InPath);
 LONG RtlGetWorkingDirectory(WCHAR* OutPath, ULONG InMaxLength);
 LONG RtlGetCurrentModulePath(WCHAR* OutPath, ULONG InMaxLength);
 
+// Barrier.c - dllmain - 初始化函数
+NTSTATUS LhBarrierProcessAttach();
+void	 LhBarrierProcessDetach();
+
 #define RTL_SUCCESS(ntstatus)       SUCCEEDED(ntstatus)
 
 // 强制对齐宏 

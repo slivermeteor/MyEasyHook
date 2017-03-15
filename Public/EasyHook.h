@@ -65,4 +65,10 @@ typedef PHOOK_TRACE_INFO TRACED_HOOK_HANDLE;
 
 DRIVER_SHARED_API(NTSTATUS, LhInstallHook(PVOID InEntryPoint, PVOID InHookProc, PVOID InCallBack, TRACED_HOOK_HANDLE OutTracedHookHandle));
 
+// EasyHookDll/LocalHook/Acl.c
+#ifndef DRIVER
+EASYHOOK_NT_API LhSetInclusiveACL(PULONG InThreadIdList, ULONG InThreadCount, TRACED_HOOK_HANDLE InHandle);
+
+#endif
+
 #endif

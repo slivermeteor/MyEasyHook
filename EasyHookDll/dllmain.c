@@ -26,6 +26,11 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 		}
 
 		EasyHookHeapHandle = HeapCreate(0, 0, 0);
+
+		LhBarrierProcessAttach();
+
+		LhCriticalInitialize();
+
 		break;
 	}
 	case DLL_THREAD_ATTACH:
@@ -38,6 +43,9 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 	}
 	case DLL_PROCESS_DETACH:
 	{
+
+		LhCriticalFinalize();
+		LhBarrierProcessDetach();
 
 		HeapDestroy(EasyHookHeapHandle);
 

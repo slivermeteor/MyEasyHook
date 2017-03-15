@@ -269,7 +269,7 @@ CALL_NET_ENTRY:
 ; call NET intro
 	lea rcx, [IsExecutedPtr + 8] ; Hook handle (only a position hint)
 	mov rdx, qword ptr [rsp + 32 + 4 * 16 + 4 * 8] ; push return address
-	lea r8, qword ptr [rsp + 32 + 4 * 16 + 4 * 8] ; push address of return address
+	lea r8, qword ptr [rsp + 32 + 4 * 16 + 4 * 8]  ; push address of return address
 	call qword ptr [NETIntro] ; Hook->NETIntro(Hook, RetAddr, InitialRSP);
 	
 ; should call original method?

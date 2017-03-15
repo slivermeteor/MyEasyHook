@@ -96,7 +96,7 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_USRDLL;EASYHOOK_EXPORTS;EASYHOOKDLL_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <PrecompiledHeaderFile>common.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>E:\Project-Visual Studio 2015\EasyHook\EasyHookDll;E:\Project-Visual Studio 2015\EasyHook\DriverShared;E:\Project-Visual Studio 2015\EasyHook\Public;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)EasyHookDll;$(SolutionDir)DriverShared;$(SolutionDir)Public;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -111,7 +111,7 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;_USRDLL;EASYHOOKDLL_EXPORTS;EASYHOOK_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <PrecompiledHeaderFile>common.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>E:\Project-Visual Studio 2015\EasyHook\Public;E:\Project-Visual Studio 2015\EasyHook\EasyHookDll;E:\Project-Visual Studio 2015\EasyHook\DriverShared;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Public;$(SolutionDir)EasyHookDll;$(SolutionDir)DriverShared;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -181,10 +181,12 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
       </PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="LocalHook\Acl.c" />
     <ClCompile Include="LocalHook\Alloc.c" />
     <ClCompile Include="LocalHook\Barrier.c" />
     <ClCompile Include="LocalHook\Install.c" />
     <ClCompile Include="LocalHook\Reloc.c" />
+    <ClCompile Include="LocalHook\Uninstall.c" />
     <ClCompile Include="RemoteHook\Entry.cpp" />
     <ClCompile Include="RemoteHook\Stealth.c" />
     <ClCompile Include="RemoteHook\Thread.c" />

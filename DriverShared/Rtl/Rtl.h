@@ -59,7 +59,12 @@ VOID* RtlAllocateMemory(BOOL InZeroMemory, ULONG32 InSize);
 VOID RtlFreeMemory(PVOID InPointer);
 LONG RtlProtectMemory(PVOID InPointer, ULONG InSize, ULONG InNewProtection);
 
+
+void RtlInitializeLock(RTL_SPIN_LOCK* OutLock);
+void RtlDeleteLock(RTL_SPIN_LOCK* InLock);
+
 VOID RtlAcquireLock(PRTL_SPIN_LOCK InLock);
 VOID RtlReleaseLock(PRTL_SPIN_LOCK InLock);
+
 
 #endif

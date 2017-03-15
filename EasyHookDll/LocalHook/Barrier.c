@@ -8,8 +8,8 @@
 
 typedef struct _RUNTIME_INFO_
 {
-	BOOL    IsExecuting;   // TRUE - 如果当前线程在相关联的Hook句柄里面
-	DWORD   HLSIdent;      // 
+	BOOL    IsExecuting;   // 当前线程是否在ACL中?是否可以执行HookProc
+	DWORD   HLSIdent;      // 在TLS中的下标
 	PVOID   RetAddress;    //     
 	PVOID*  AddrOfRetAddr; // Hook返回代码的返回地址 ？
 }RUNTIME_INFO, *PRUNTIME_INFO;
@@ -17,7 +17,7 @@ typedef struct _RUNTIME_INFO_
 typedef struct _THREAD_RUNTIME_INFO_
 {
 	PRUNTIME_INFO Entries;
-	PRUNTIME_INFO Current;
+	PRUNTIME_INFO Current;			// 当前 RUNTIME_INFO
 	PVOID         CallBack;
 	BOOL          IsProtected;
 }THREAD_RUNTIME_INFO, *PTHREAD_RUNTIME_INFO;
@@ -36,7 +36,6 @@ typedef struct _BARRIER_UNIT_
 	THREAD_LOCAL_STORAGE TLS;
 }BARRIER_UNIT, *PBARRIER_UNIT;
 
-
 static BARRIER_UNIT BarrierUnit;
 
 // EasyHookDll/LocalHook/Barrier.c
@@ -44,9 +43,17 @@ BOOL IsLoaderLock();
 BOOL TlsGetCurrentValue(THREAD_LOCAL_STORAGE* InTls, PTHREAD_RUNTIME_INFO* OutValue);
 BOOL TlsAddCurrentThread(THREAD_LOCAL_STORAGE* InTls);
 BOOL AcquireSelfProtection();
+void ReleaseSelfProtection();
+BOOL ACLContains(PHOOK_ACL InACL, ULONG InCheckID);
 
 
-// TrampolineASM 调用 - 初始化函数
+#ifndef DRIVER
+BOOL IsThreadIntercepted(PHOOK_ACL LocalACL, ULONG InThreadId);
+#else
+BOOL IsProcessIntercepted(PHOOK_ACL LocalACL, ULONG InProcessID);
+#endif
+
+// TrampolineASM 调用 - 判断当前线程是否在ACL中，决定是否执行Hook
 ULONG64 LhBarrierIntro(LOCAL_HOOK_INFO* InHandle, PVOID InRetAddr, PVOID* InAddrOfRetAddr)
 {
     PTHREAD_RUNTIME_INFO ThreadRuntimeInfo = NULL;
@@ -65,8 +72,10 @@ ULONG64 LhBarrierIntro(LOCAL_HOOK_INFO* InHandle, PVOID InRetAddr, PVOID* InAddr
 		return FALSE;
 	}
 
+	// 当前线程是否已经TLS里？
 	bIsRegister = TlsGetCurrentValue(&BarrierUnit.TLS, &ThreadRuntimeInfo);
 
+	// 未注册 - 进行注册
 	if (!bIsRegister)
 	{
 		if (!TlsAddCurrentThread(&BarrierUnit.TLS))
@@ -77,9 +86,8 @@ ULONG64 LhBarrierIntro(LOCAL_HOOK_INFO* InHandle, PVOID InRetAddr, PVOID* InAddr
 		为了让不能Hook的API尽可能的少，我们使用自我保护
 		这将允许任何人Hook任何API除了哪些需要自我保护的
 
-		自我保护阻止任何后来的Hook中断当前的操作，当我们进入 线程死锁阻碍墙
+		自我保护阻止任何后来的Hook中断当前的操作，当我们进入 线程进入死锁阻碍墙
 	*/
-
 	if (!AcquireSelfProtection())
 	{
 		// 如果申请失败 - 汇编代码直接失败 不再调用 LhBarrierOutro
@@ -87,11 +95,13 @@ ULONG64 LhBarrierIntro(LOCAL_HOOK_INFO* InHandle, PVOID InRetAddr, PVOID* InAddr
 	}
 
 	ASSERT(InHandle->HLSIndex < MAX_HOOK_COUNT, L"Barrier.c - InHandle->HLSIndex < MAX_HOOK_COUNT");
-	 
+	
+	// 如果没有注册 - 得到ThreadRuntimeInfo
 	if (!bIsRegister)
 	{
 		TlsGetCurrentValue(&BarrierUnit.TLS, &ThreadRuntimeInfo);
 
+		// 申请 RUNTIME_INFO
 		ThreadRuntimeInfo->Entries = (PRUNTIME_INFO)RtlAllocateMemory(TRUE, sizeof(RUNTIME_INFO) * MAX_HOOK_COUNT);
 
 		if (ThreadRuntimeInfo->Entries == NULL)
@@ -115,21 +125,38 @@ ULONG64 LhBarrierIntro(LOCAL_HOOK_INFO* InHandle, PVOID InRetAddr, PVOID* InAddr
 		goto DONT_INTERCEPT;
 	}
 
+	// 记录回调和运行信息
 	ThreadRuntimeInfo->CallBack = InHandle->CallBack;
 	ThreadRuntimeInfo->Current = RuntimeInfo;
 
-	// ?
+	// 判断当前线程是否运行执行 HookProc
 #ifndef DRIVER
-	//RuntimeInfo->IsExecuting = IsThreadIntercepted(&InHandle->LocalACL, GetCurrentThreadId());
+	RuntimeInfo->IsExecuting = IsThreadIntercepted(&InHandle->LocalACL, GetCurrentThreadId());
 #else
-
+	RuntimeInfo->IsExecuting = IsProcessIntercepted(&InHandle->LocalACL, (ULONG)PsGetCurrentProcessId());
 #endif
 
+	if (!RuntimeInfo->IsExecuting)
+		goto DONT_INTERCEPT;
 
+	// 保存特殊的信息
+	RuntimeInfo->RetAddress = InRetAddr;
+	RuntimeInfo->AddrOfRetAddr = InAddrOfRetAddr;
+
+	ReleaseSelfProtection();
+
+	return TRUE;
 
 DONT_INTERCEPT:
 	{
-		return 0;
+		if (ThreadRuntimeInfo != NULL)
+		{
+			ThreadRuntimeInfo->CallBack = NULL;
+			ThreadRuntimeInfo->Current = NULL;
+
+			ReleaseSelfProtection();
+		}
+		return FALSE;
 	}
 
 }
@@ -217,4 +244,115 @@ BOOL AcquireSelfProtection()
 	Runtime->IsProtected = TRUE;
 
 	return TRUE;
+}
+
+void ReleaseSelfProtection()
+{
+	PTHREAD_RUNTIME_INFO ThreadRuntimeInfo = NULL;
+
+	ASSERT(TlsGetCurrentValue(&BarrierUnit.TLS, &ThreadRuntimeInfo) && ThreadRuntimeInfo->IsProtected, L"Barrier.c - &BarrierUnit.TLS, &ThreadRuntimeInfo) && ThreadRuntimeInfo->IsProtected");
+
+	ThreadRuntimeInfo->IsProtected = FALSE;
+}
+
+// 判断目标线程/进程 是否可以通过ACL
+// 如果给定的线程被全局和本地ACL拦截，则为TRUE，否则为FALSE。
+#ifndef DRIVER
+BOOL IsThreadIntercepted(PHOOK_ACL LocalACL, ULONG InThreadId)
+#else
+BOOL IsProcessIntercepted(PHOOK_ACL LocalACL, ULONG InProcessID)
+#endif
+{
+	ULONG CheckID = 0;
+
+#ifndef DRIVER
+	if (InThreadId == 0)
+		CheckID = GetCurrentThreadId();
+	else
+		CheckID = InThreadId;
+#else
+	if (InProcessID == 0)
+		CheckID = (ULONG)PsGetCurrentProcessId();
+	else
+		CheckID = InProcessID;
+#endif
+
+	// 全局ACL中是否有目标ID？
+	if (ACLContains(&BarrierUnit.GlobalACL, CheckID))
+	{
+		if (ACLContains(LocalACL, CheckID))
+		{
+			if (LocalACL->IsExclusive)	
+				return FALSE;	// 在当前ACL中有目标ID，并且互斥 - 说明拒绝运行?
+		}		
+		else
+		{
+			if (!LocalACL->IsExclusive)	// 不在ACL中,不互斥 - 说明允许
+				return FALSE;
+		}
+			
+		return !BarrierUnit.GlobalACL.IsExclusive;	// 已经在全局ACL中 取反 返回
+	}
+	else
+	{
+		if (ACLContains(LocalACL, CheckID))
+		{
+			if (LocalACL->IsExclusive)
+				return FALSE;
+		}			
+		else
+		{
+			if (!LocalACL->IsExclusive)
+				return FALSE;
+		}
+			
+		return BarrierUnit.GlobalACL.IsExclusive;
+	}
+}
+
+/// \如果传入的ACL里有CheckId，返回真，反之假
+BOOL ACLContains(PHOOK_ACL InACL, ULONG InCheckID)
+{
+	ULONG Index = 0;
+
+	for (Index = 0; Index < InACL->Count; Index++)
+	{
+		if (InACL->Entries[Index] == InCheckID)
+			return TRUE;
+	}
+
+	return FALSE;
+}
+
+// 在Dll加载的时候调用 - 初始化所有界限结构体
+NTSTATUS LhBarrierProcessAttach()
+{
+	RtlZeroMemory(&BarrierUnit, sizeof(BARRIER_UNIT));
+
+	BarrierUnit.GlobalACL.IsExclusive = TRUE;	// 禁止中断
+
+	RtlInitializeLock(&BarrierUnit.TLS.ThreadLock);
+
+#ifndef DRIVER
+	// AuxUlibInitialize - 初始化 Aux_ulib 库 - 这个函数必须在 Aux_ulib 任何函数前调用
+	BarrierUnit.IsInitialized = AuxUlibInitialize() ? TRUE : FALSE;
+	return STATUS_SUCCESS;
+#else
+	
+#endif
+}
+
+void LhBarrierProcessDetach()
+{
+#ifdef DRIVER
+
+#endif
+	RtlDeleteLock(&BarrierUnit.TLS.ThreadLock);
+	for (LONG Index = 0; Index < MAX_THREAD_COUNT; Index++)
+	{
+		if (BarrierUnit.TLS.Entries[Index].Entries != NULL)
+			RtlFreeMemory(BarrierUnit.TLS.Entries[Index].Entries);
+	}
+
+	RtlZeroMemory(&BarrierUnit, sizeof(BARRIER_UNIT));
 }

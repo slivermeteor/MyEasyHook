@@ -70,9 +70,10 @@ THROW_OUTRO:
 }
 }
 
-// 将InEntryPoint重新放入Buffer，并将迁移的长度放入RelocSize
+
 EASYHOOK_NT_INTERNAL LhRelocateEntryPoint(PVOID InEntryPoint, ULONG InEPSize, PVOID Buffer, PULONG OutRelocSize)
 {
+	// 将InEntryPoint重新放入Buffer，并将迁移的长度放入RelocSize
 	PUCHAR   OldAddr = InEntryPoint;
 	PUCHAR   NewAddr = Buffer;
 	UCHAR    FirstCode = 0;
@@ -174,7 +175,7 @@ EASYHOOK_NT_INTERNAL LhRelocateEntryPoint(PVOID InEntryPoint, ULONG InEPSize, PV
 			NewAddr += sizeof(PVOID);	// 越过目标地址长度
 
 			// 跳转的实际地址 是否有意义???
-			if ((NewAddr >= (LONGLONG)InEntryPoint) && (AbsAddr < (LONGLONG)InEntryPoint + InEPSize))
+			if (((LONGLONG)NewAddr >= (LONGLONG)InEntryPoint) && (AbsAddr < (LONGLONG)InEntryPoint + InEPSize))
 			{
 				THROW(STATUS_NOT_SUPPORTED, L"Hooking jumps into the hooked entry point is not supported.");
 			}
@@ -216,7 +217,7 @@ EASYHOOK_NT_INTERNAL LhRelocateEntryPoint(PVOID InEntryPoint, ULONG InEPSize, PV
 			FORCE(LhRelocateRIPRelativeInstruction((ULONGLONG)OldAddr, (ULONGLONG)NewAddr, &bIsRIPRelatieve));
 		}
 		
-		// 如果是16位，OldAddr向前移动一位来进行判断，现在进行指令拷贝回退一位
+		// 如果是16位，前面OldAddr向前移动了一位-为了进行判断。现在进行指令拷贝回退一位，进行拷贝。
 		if (b16bit)
 		{
 			OldAddr--;
@@ -224,7 +225,7 @@ EASYHOOK_NT_INTERNAL LhRelocateEntryPoint(PVOID InEntryPoint, ULONG InEPSize, PV
 
 		// 得到第一条指令 完整长度
 		FORCE(LhGetInstructionLength(OldAddr, &InstrLength));
-		// 如果不是跳转指令，拷贝指令即可 并且也没有 RIP 相关 - 直接拷贝
+		// 如果不是跳转指令，并且也没有 RIP 相关 - 直接拷贝
 		if (OpCodeLength == 0)
 		{
 			if (!bIsRIPRelatieve)
