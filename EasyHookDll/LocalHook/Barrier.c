@@ -356,3 +356,38 @@ void LhBarrierProcessDetach()
 
 	RtlZeroMemory(&BarrierUnit, sizeof(BARRIER_UNIT));
 }
+
+PVOID _stdcall LhBarrierOutro(PLOCAL_HOOK_INFO InHandle, PVOID* InAddrOfRetAddr)
+{
+	// Outro 在实际Hook函数执行完成后 执行
+	PRUNTIME_INFO Runtime = NULL;
+	PTHREAD_RUNTIME_INFO ThreadRuntimeInfo = NULL;
+
+#ifdef _M_X64
+	InHandle -= 1;
+#endif
+
+	ASSERT(AcquireSelfProtection(), L"Barrier.c - AcquireSelfProtection()");
+	ASSERT(TlsGetCurrentValue(&BarrierUnit.TLS, &ThreadRuntimeInfo) && (ThreadRuntimeInfo != NULL), 
+		   L"Barrier.c - TlsGetCurrentValue(&BarrierUnit.TLS, &ThreadRuntimeInfo) && (ThreadRuntimeInfo != NULL)");
+
+	Runtime = &ThreadRuntimeInfo->Entries[InHandle->HLSIndex];
+
+	// 清空上下文
+	ThreadRuntimeInfo->Current = NULL;
+	ThreadRuntimeInfo->CallBack = NULL;
+
+	ASSERT(Runtime != NULL, L"Barrier.c - Runtime != NULL");
+
+	ASSERT(Runtime->IsExecuting, L"Barrier.c - Runtime->IsExecuting");
+
+	Runtime->IsExecuting = FALSE;
+
+	ASSERT(*InAddrOfRetAddr == NULL, L"Barrier.c - *InAddrOfRetAddr == NULL");
+
+	*InAddrOfRetAddr = Runtime->RetAddress;
+
+	ReleaseSelfProtection();
+
+	return InHandle;
+}

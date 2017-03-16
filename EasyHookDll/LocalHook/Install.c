@@ -26,7 +26,7 @@ void LhCriticalInitialize()
 // 一般是8字节，但是在64位驱动下是16字节
 #define MAX_JMP_SIZE 16
 
-EASYHOOK_NT_API  LnInstallHook(PVOID InEntryPoint, PVOID InHookProc, PVOID InCallBack, TRACED_HOOK_HANDLE OutTracedHookHandle)
+EASYHOOK_NT_API LhInstallHook(PVOID InEntryPoint, PVOID InHookProc, PVOID InCallBack, TRACED_HOOK_HANDLE OutTracedHookHandle)
 {
 	BOOL     Exists = FALSE;
 	ULONG	 RelocSize = 0;
@@ -101,7 +101,7 @@ EASYHOOK_NT_API  LnInstallHook(PVOID InEntryPoint, PVOID InHookProc, PVOID InCal
 
 #else
 
-	// 保留原本的入口代码 - 5字节
+	// 保留原本的入口代码 - 5字节 真正的Hook
 	EntrySave = *((ULONG64*)LocalHookInfo->TargetProc);
 	{
 		RtlCopyMemory(&EntrySave, Jumper, 5);
@@ -182,13 +182,14 @@ EASYHOOK_NT_INTERNAL LhAllocateHook(PVOID InEntryPoint, PVOID InHookProc, PVOID 
 	FORCE(RtlProtectMemory(LocalHookInfo, PageSize, PAGE_EXECUTE_READWRITE));
 	// 将MemoryPtr设置到 LOCAL_HOOK_INFO 的尾部 我们将跳转的ShellCode和原Code拷贝到这个地方
 	// 也就说Hook后的 Func 将会是: LOCAL_HOOK_INFO + ShellCode + OldProc
-	MemoryPtr = (PUCHAR)(LocalHookInfo + 1);	// LOCAL_HOOK_INFO
+	MemoryPtr = (PUCHAR)(LocalHookInfo + 1);	// LOCAL_HOOK_INFO |
 												//                ↑ MemoryPtr
 
 #ifdef X64_DRIVER
 	FORCE(EntrySize = LhRoundToNextInstruction(InEntryPoint, X64_DRIVER_JMPSIZE));
 #else
 	// HookProc 得到第一条尾偏移大于5的指令的尾偏移 == 第一条偏移大于5的指令的偏移
+	// 一般WINAPI都是stdcall - 所以入口都是第二次跳转指令，长度也就是5
 	FORCE(LhRoundToNextInstruction(InEntryPoint, 5, &EntrySize));
 #endif
 
@@ -217,28 +218,29 @@ EASYHOOK_NT_INTERNAL LhAllocateHook(PVOID InEntryPoint, PVOID InHookProc, PVOID 
 	*/
 	// 未实现函数
 	LocalHookInfo->HookIntro = LhBarrierIntro;
-	//LocalHookInfo->HookOutro = LhBarrierOutro;
+	LocalHookInfo->HookOutro = LhBarrierOutro;
 
 	// 拷贝跳转指令
-	LocalHookInfo->Trampoline = MemoryPtr; // MemoryPtr 是越过LocalHookInfo 也就是当前结构体的尾部
+	LocalHookInfo->Trampoline = MemoryPtr; // MemoryPtr 是越过 LocalHookInfo 也就是当前结构体的尾部
 	MemoryPtr += GetTrampolineSize();	   // LOCAL_HOOK_INFO | TrampolineASM | 
 										   //							      ↑ MemoryPtr
 
 	LocalHookInfo->Size += GetTrampolineSize();	// 长度更新
 
-	// 拷贝 Trampoline asm汇编代码
+	// 拷贝 Trampoline asm汇编代码 - 注意在x64位下 前面的fixed值不会被拷贝进去，asm中使用那种技巧来快速访问结构体变量里的值。
 	RtlCopyMemory(LocalHookInfo->Trampoline, GetTrampolinePtr(), GetTrampolineSize());
 	/*
 		重新申请入口代码长度，因为这些代码必须被直接写入到申请的内存空间中。
-		因为我们要劫持EIP/RIP就必须知道我们要去哪
-
-		入口函数代码将会被放在 Trampoline 后面。
+		之所以要重构入口代码 - 是为了当我们的Hook不执行的时候，我们要直接去调用原函数。所以要对原本入口的跳转代码和EIP相关代码进行重构
+		重构的入口代码将被放在 Trampoline 之后
 	*/
+	// 开始重构原本入口代码
 	*RelocSize = 0;
 	LocalHookInfo->OldProc = MemoryPtr;
 
 	FORCE(LhRelocateEntryPoint(LocalHookInfo->TargetProc, EntrySize, LocalHookInfo->OldProc, RelocSize));
-	// 确保空间还是足够
+	// 确保空间还是足够 - RelocCode之后还要放跳回指令
+	// 因为如果入口函数不是一句跳转指令，只是一句正常的操作指令。那么我们在执行完成后，应该跳回原函数的下一句地址，继续正常执行。
 	MemoryPtr += (*RelocSize + MAX_JMP_SIZE);		// LOCAL_HOOK_INFO | TrampolineASM |  Old Proc |
 													//							       | EntrySize |↑ MemoryPtr
 	LocalHookInfo->Size += (*RelocSize + MAX_JMP_SIZE);	// 留够足够空间
@@ -248,9 +250,9 @@ EASYHOOK_NT_INTERNAL LhAllocateHook(PVOID InEntryPoint, PVOID InHookProc, PVOID 
 
 
 #else
-	// 计算偏移 - 原本函数入口(越过入口代码) 跳转到 旧入口代码保存地址
-	// TargetProc + EntrySize : 目标函数地址+入口指令地址													
-	// OldProc(用于放原函数的地址) + *RelocSize(对原入口代码进行变化后的指令长度) + 5 : 
+	// 计算偏移 - 新入口代码 跳转到 原本函数入口代码跳过重构部分
+	// TargetProc + EntrySize : 目标函数地址+入口代码长度(也就是我们废弃掉的长度)													
+	// OldProc(用于放原函数的地址) + *RelocSize(对原入口代码进行变化后的指令长度) + 5(当前这句跳转指令的长度) : 
 	RelAddr = (LONG64)((PUCHAR)LocalHookInfo->TargetProc + LocalHookInfo->EntrySize) - ((LONG64)LocalHookInfo->OldProc + *RelocSize + 5);
 
 	// 偏移有没有查过32位
@@ -259,7 +261,7 @@ EASYHOOK_NT_INTERNAL LhAllocateHook(PVOID InEntryPoint, PVOID InHookProc, PVOID 
 		THROW(STATUS_NOT_SUPPORTED, L"The Given Entry Point Is Out Of Reach.");
 	}
 
-	// 写入跳转指令 - 执行完原本的入口代码，跳回原函数
+	// 写入跳转指令 
 	((PUCHAR)LocalHookInfo->OldProc)[*RelocSize] = 0xE9;
 
 	RtlCopyMemory((PUCHAR)LocalHookInfo->OldProc + *RelocSize + 1, &RelAddr, 4);

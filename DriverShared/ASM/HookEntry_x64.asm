@@ -228,19 +228,19 @@ IsExecutedPtr:
 	
 ; ATTENTION: 64-Bit requires stack alignment (RSP) of 16 bytes!!
 	mov rax, rsp
-	push rcx ; save not sanitized registers...
+	push rcx ; 保存参数
 	push rdx
 	push r8
 	push r9
 	
-	sub rsp, 4 * 16 ; space for SSE registers
+	sub rsp, 4 * 16 ; 开辟栈区 - 保存浮点型参数
 	
 	movups [rsp + 3 * 16], xmm0
 	movups [rsp + 2 * 16], xmm1
 	movups [rsp + 1 * 16], xmm2
 	movups [rsp + 0 * 16], xmm3
 	
-	sub rsp, 32; shadow space for method calls
+	sub rsp, 32; 为子函数调用开辟栈区
 	
 	lea rax, [IsExecutedPtr]
 	mov rax, [rax]

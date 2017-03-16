@@ -14,7 +14,7 @@ EASYHOOK_NT_API LhSetInclusiveACL(PULONG InThreadIdList, ULONG InThreadCount, TR
 	PLOCAL_HOOK_INFO Handle = NULL;
 
 	// 判断Hook句柄是否有效 - 返回真正的 LOCAL_HOOK_INFO
-	if (LhIsValidHandle(InHandle, &Handle))
+	if (!LhIsValidHandle(InHandle, &Handle))
 		return STATUS_INVALID_PARAMETER_3;
 
 	return LhSetACL(&Handle->LocalACL, FALSE, InThreadIdList, InThreadCount);

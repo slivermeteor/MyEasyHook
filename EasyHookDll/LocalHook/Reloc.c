@@ -125,7 +125,7 @@ EASYHOOK_NT_INTERNAL LhRelocateEntryPoint(PVOID InEntryPoint, ULONG InEPSize, PV
 			}
 			else    // 经典的函数跳转
 			{
-				AbsAddr = *((INT32*)(OldAddr + 1));
+				AbsAddr = *((INT32*)(OldAddr + 1));	//取原偏移
 				OpCodeLength = 5;
 			}
 			break;

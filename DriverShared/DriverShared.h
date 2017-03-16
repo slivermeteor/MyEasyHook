@@ -27,7 +27,7 @@ typedef struct _LOCAL_HOOK_INFO_
 
 	PVOID			 TargetProc;		// 被Hook函数
 	ULONG64			 TargetBackup;	    // 目标备份函数
-	ULONGLONG		 TargetBackup_x64;  // X64-Driver使用
+	ULONG64		     TargetBackup_x64;  // X64-Driver使用
 	ULONG64			 HookOldSave;		// 保留Hook入口原代码
 	ULONG			 EntrySize;			// 入口指令长度 (>5
 	PVOID			 Trampoline;
@@ -40,8 +40,9 @@ typedef struct _LOCAL_HOOK_INFO_
 	TRACED_HOOK_HANDLE      Tracking;   // 指向 包含当前Hook信息的Handle
 
 	PVOID			 RandomValue;	
+	// 64位下 直接覆盖asm函数前面参数
 	PVOID			 HookIntro;			// ACL判断 - Tramp 初始化函数
-	PVOID			 OldProc;			// 存储被覆盖的原入口代码
+	PVOID			 OldProc;			// 当不执行Hook，Trampo就执行这里的代码直接调用原函数
 	PVOID			 HookProc;			// 实际Hook函数
 	PVOID			 HookOutro;			// 运行环境初始化函数
 
@@ -71,6 +72,7 @@ void LhCriticalInitialize();
 
 // EasyHookDll/LocalHook/Barrier.c 内部函数
 ULONG64 LhBarrierIntro(LOCAL_HOOK_INFO* InHandle, PVOID InRetAddr, PVOID* InAddrOfRetAddr);
+PVOID _stdcall LhBarrierOutro(PLOCAL_HOOK_INFO InHandle, PVOID* InAddrOfRetAddr);
 
 // EasyHookDll/LocalHook/Uninstall.c 
 void LhCriticalFinalize();

@@ -16,32 +16,64 @@ using namespace std;
 #endif
 
 ULONG32 GetProcessIdByName(WCHAR* wzProcessName);
+VOID TestLocalHook();
+VOID Test();
 
 int main()
-{
-	WCHAR wzProcessName[MAX_PATH] = { 0 };
-	cout << "Input the target process name:";
-	scanf("%S", wzProcessName);
+{	
+	LONG Index = 0;
+	while (TRUE)
+	{
+		cout << "Input the index of Hook method:" << endl;
+		cout << "1. Remote Hook." << endl << "2. Local Hook." << endl << "3. Exit." << endl;
+		cout << "Index:"; cin >> Index;
 
-	ULONG32 TargetProcessID = GetProcessIdByName(wzProcessName);
+		if (Index == 1)
+		{
+			WCHAR wzProcessName[MAX_PATH] = { 0 };
+			cout << "Input the target process name:";
+			scanf("%S", wzProcessName);
+	
+
+			ULONG32 TargetProcessID = GetProcessIdByName(wzProcessName);
 
 #ifndef _WIN64
-	WCHAR wzInjectDllPath[MAX_PATH] = L"InjectDll32.dll";
-	NTSTATUS Status = RhInjectLibrary(TargetProcessID, 0, EASYHOOK_INJECT_STEALTH, wzInjectDllPath, NULL, NULL, 0);
+			WCHAR wzInjectDllPath[MAX_PATH] = L"InjectDll32.dll";
+			NTSTATUS Status = RhInjectLibrary(TargetProcessID, 0, EASYHOOK_INJECT_STEALTH, wzInjectDllPath, NULL, NULL, 0);
 #else
-	WCHAR wzInjectDllPath[MAX_PATH] = L"InjectDll64.dll";
-	NTSTATUS Status = RhInjectLibrary(TargetProcessID, 0, EASYHOOK_INJECT_STEALTH, NULL, wzInjectDllPath, NULL, 0);
+			WCHAR wzInjectDllPath[MAX_PATH] = L"InjectDll64.dll";
+			NTSTATUS Status = RhInjectLibrary(TargetProcessID, 0, EASYHOOK_INJECT_STEALTH, NULL, wzInjectDllPath, NULL, 0);
 #endif
 
-	
-	if (Status != STATUS_SUCCESS)
-	{
-		cout << "Remote hook failed. Error Code:" << hex << Status << endl;
-		printf("Error Message:%S\r\n", RtlGetLastErrorString());
-	}
-	else
-	{
-		cout << "Remote hook success." << endl;
+
+			if (Status != STATUS_SUCCESS)
+			{
+				cout << "Remote hook failed. Error Code:" << hex << Status << endl;
+				printf("Error Message:%S\r\n", RtlGetLastErrorString());
+			}
+			else
+			{
+				cout << "Remote hook success." << endl;
+			}
+		}
+		else if (Index == 2)
+		{
+			HOOK_TRACE_INFO HookTraceInfo = { 0 };
+			NTSTATUS Status = LhInstallHook(Test, TestLocalHook, NULL, &HookTraceInfo);
+			if (FAILED(Status))
+			{
+				cout << "Local Hook Failed." << endl;
+				break;
+			}
+
+			Test();
+			ULONG ACE[1] = { 0 };
+			LhSetInclusiveACL(ACE, 1, &HookTraceInfo);
+
+			Test();
+		}
+		else if (Index == 3)
+			break;
 	}
 
 	system("pause");
@@ -69,4 +101,15 @@ ULONG32 GetProcessIdByName(WCHAR * wzProcessName)
 	}
 
 	return ULONG32(0);
+}
+
+VOID Test()
+{
+	cout << "HelloWorld" << endl;
+}
+
+VOID TestLocalHook()
+{
+	cout << "Hook" << endl;
+	Test();
 }
