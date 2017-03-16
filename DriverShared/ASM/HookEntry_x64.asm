@@ -170,7 +170,7 @@ Injection_ASM_x64 ENDP
 public Trampoline_ASM_x64
 
 Trampoline_ASM_x64 PROC
-
+; 64位定义下面这些变量 起始是LocalHookInfo的最后几个变量，这里定义只是为了快速访问。
 NETIntro:
 	;void*			NETEntry; // fixed 0 (0) 
 	db 0
@@ -194,7 +194,7 @@ OldProc:
 	db 0
 	
 NewProc:
-	;BYTE*			NewProc; // fixed 8 (16) 
+	;PVOID HookProc; // fixed 8 (16) 
 	db 0
 	db 0
 	db 0
@@ -225,8 +225,8 @@ IsExecutedPtr:
 	db 0
 	db 0
 	db 0
-	
-; ATTENTION: 64-Bit requires stack alignment (RSP) of 16 bytes!!
+
+;注意 64位 汇编函数栈区必须16位对齐
 	mov rax, rsp
 	push rcx ; 保存参数
 	push rdx
@@ -241,90 +241,91 @@ IsExecutedPtr:
 	movups [rsp + 0 * 16], xmm3
 	
 	sub rsp, 32; 为子函数调用开辟栈区
-	
+; Stack:| rcx, rdx, r8, r9 | xmm0, xmm1, xmm2, xmm3 | child functions parameters stack | rsp
+;       |       32bit      |         64bit          |                32bit             |	
 	lea rax, [IsExecutedPtr]
 	mov rax, [rax]
-	db 0F0h ; interlocked increment execution counter
-	inc qword ptr [rax]
+	;db 0F0h 					
+	lock inc qword ptr [rax]		; 锁住内存 - 汇编语法
 	
-; is a user handler available?
+;   Hook函数存在吗?
 	cmp qword ptr[NewProc], 0
-	
-	db 3Eh ; branch usually taken
+	db 3Eh 							; branch usually taken
 	jne CALL_NET_ENTRY
 	
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; call original method
+; 没有Hook函数，直接呼叫原函数
 		lea rax, [IsExecutedPtr]
 		mov rax, [rax]
-		db 0F0h ; interlocked decrement execution counter
-		dec qword ptr [rax]
+		;db 0F0h 				
+		lock dec qword ptr [rax]	; 锁住内存 - 汇编语法
 		
 		lea rax, [OldProc]
 		jmp TRAMPOLINE_EXIT
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; call hook handler or original method...
+; 呼叫Hook函数 或者 原函数
 CALL_NET_ENTRY:	
 
+; call BarrierIntro
+	lea rcx, [IsExecutedPtr + 8] ; 这里传入的是LocalHookInfo的尾部地址，在BarrierIntro里64位会自己回退到头部
+	mov rdx, qword ptr [rsp + 32 + 4 * 16 + 4 * 8] ; 32 是四个参数寄存器 4*16 是四个浮点参数寄存器 32 是子函数参数栈区 - 这样就回到了当前函数栈区外第一个参数 - 也就是call当前函数放入的rip
+	lea r8, qword ptr [rsp + 32 + 4 * 16 + 4 * 8]  ; 取得返回地址值的存储地址
+	call qword ptr [NETIntro] ; LocalHookInfo->NETIntro(Hook, RetAddr(RIP), InitialRSP);
 	
-; call NET intro
-	lea rcx, [IsExecutedPtr + 8] ; Hook handle (only a position hint)
-	mov rdx, qword ptr [rsp + 32 + 4 * 16 + 4 * 8] ; push return address
-	lea r8, qword ptr [rsp + 32 + 4 * 16 + 4 * 8]  ; push address of return address
-	call qword ptr [NETIntro] ; Hook->NETIntro(Hook, RetAddr, InitialRSP);
-	
-; should call original method?
+; 可以呼叫Hook函数吗? - ACL决定 (rax = RuntimeInfo->IsExecuting)
 	test rax, rax
 	
 	db 3Eh ; branch usually taken
 	jne CALL_HOOK_HANDLER
 	
-	; call original method
+	; 不能呼叫hook函数 - 呼叫原函数
 		lea rax, [IsExecutedPtr]
 		mov rax, [rax]
-		db 0F0h ; interlocked decrement execution counter
-		dec qword ptr [rax]
+		;db 0F0h ; 
+		lock dec qword ptr [rax]
 	
 		lea rax, [OldProc]
 		jmp TRAMPOLINE_EXIT
 		
 CALL_HOOK_HANDLER:
-; adjust return address
+;   设置Hook函数返回地址 - 前往BarrierOutro呼叫入口(CALL_NET_OUTRO)
 	lea rax, [CALL_NET_OUTRO]
 	mov qword ptr [rsp + 32 + 4 * 16 + 4 * 8], rax
 
-; call hook handler
+; 开始准备呼叫Hook函数
 	lea rax, [NewProc]
 	jmp TRAMPOLINE_EXIT 
 
-CALL_NET_OUTRO: ; this is where the handler returns...
+CALL_NET_OUTRO: ; Hook函数返回地址
 
-; call NET outro
-	push 0 ; space for return address
+; call BarrierOutro
+	push 0 ; 准备放返回地址
 	push rax
-	
+
 	sub rsp, 32 + 16; shadow space for method calls and SSE registers
+; 注意在这里，已经调用了Hook函数。栈区已经发生了改变,原本所有的栈区已经被回收
+; Stack:| 0, rax | 	xmm0(浮点返回值)  |            |
+;       |  32bit |  16bit            |    32bit   |
 	movups [rsp + 32], xmm0
 	
-	lea rcx, [IsExecutedPtr + 8]  ; Param 1: Hook handle hint
-	lea rdx, [rsp + 56] ; Param 2: Address of return address
-	call qword ptr [NETOutro] ; Hook->NETOutro(Hook);
+	lea rcx, [IsExecutedPtr + 8]  ; Param 1: 同样的传参方法
+	lea rdx, [rsp + 56] 		  ; Param 2: 返回地址存储值 - BarrierOutro取出原返回地址 放入。
+	call qword ptr [NETOutro] ; Hook->BarrierOutro(Hook);
 	
 	lea rax, [IsExecutedPtr]
 	mov rax, [rax]
-	db 0F0h ; interlocked decrement execution counter
-	dec qword ptr [rax]
+	;db 0F0h 
+	lock dec qword ptr [rax]
 	
-	add rsp, 32 + 16
-	movups xmm0, [rsp - 16]
+	add rsp, 32 + 16		; 控制rsp
+	movups xmm0, [rsp - 16]	; 返回值恢复
 	
-	pop rax ; restore return value of user handler...
+	pop rax ; 保存Hook函数返回的返回值
 	
-; finally return to saved return address - the caller of this trampoline...
+;   控制住rsp 正好指向 BarrierOutro 返回的返回地址
 	ret
-	
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; generic outro for both cases...
-TRAMPOLINE_EXIT:
 
+TRAMPOLINE_EXIT:
+	; 恢复参数和栈区 - 呼叫Hook函数或者原函数
 	add rsp, 32 + 16 * 4
 
 	movups xmm3, [rsp - 4 * 16]
@@ -337,10 +338,11 @@ TRAMPOLINE_EXIT:
 	pop rdx
 	pop rcx
 	
-	jmp qword ptr[rax] ; ATTENTION: In case of hook handler we will return to CALL_NET_OUTRO, otherwise to the caller...
+	jmp qword ptr[rax] ; ! 如果呼叫Hook函数，还是会返回到当前ASM中去调用Outro去清理RuntimeInfo。
+					   ; 呼叫原函数，就是正常结束
 	
 	
-; outro signature, to automatically determine code size
+; 标志位 - 计算汇编函数长度
 	db 78h
 	db 56h
 	db 34h

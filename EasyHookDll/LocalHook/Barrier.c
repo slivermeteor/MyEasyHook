@@ -16,7 +16,7 @@ typedef struct _RUNTIME_INFO_
 
 typedef struct _THREAD_RUNTIME_INFO_
 {
-	PRUNTIME_INFO Entries;
+	PRUNTIME_INFO Entries;			
 	PRUNTIME_INFO Current;			// 当前 RUNTIME_INFO
 	PVOID         CallBack;
 	BOOL          IsProtected;
@@ -72,10 +72,10 @@ ULONG64 LhBarrierIntro(LOCAL_HOOK_INFO* InHandle, PVOID InRetAddr, PVOID* InAddr
 		return FALSE;
 	}
 
-	// 当前线程是否已经TLS里？
+	// 当前线程是否已经TLS里？ - 依据线程ID查找
 	bIsRegister = TlsGetCurrentValue(&BarrierUnit.TLS, &ThreadRuntimeInfo);
 
-	// 未注册 - 进行注册
+	// 未注册 - 进行注册，主要是将线程ID放入TLS中
 	if (!bIsRegister)
 	{
 		if (!TlsAddCurrentThread(&BarrierUnit.TLS))
@@ -96,7 +96,7 @@ ULONG64 LhBarrierIntro(LOCAL_HOOK_INFO* InHandle, PVOID InRetAddr, PVOID* InAddr
 
 	ASSERT(InHandle->HLSIndex < MAX_HOOK_COUNT, L"Barrier.c - InHandle->HLSIndex < MAX_HOOK_COUNT");
 	
-	// 如果没有注册 - 得到ThreadRuntimeInfo
+	// 如果没有注册 - 初始化ThreadRuntimeInfo
 	if (!bIsRegister)
 	{
 		TlsGetCurrentValue(&BarrierUnit.TLS, &ThreadRuntimeInfo);
@@ -109,7 +109,7 @@ ULONG64 LhBarrierIntro(LOCAL_HOOK_INFO* InHandle, PVOID InRetAddr, PVOID* InAddr
 	}
 
 	// 得到Hook运行信息
-	RuntimeInfo = &ThreadRuntimeInfo->Entries[InHandle->HLSIndex];
+	RuntimeInfo = &ThreadRuntimeInfo->Entries[InHandle->HLSIndex];	// HLSIndex - 在全局里注册的Index同时对应在BarrierUnit里的Entrise的Index
 	if (RuntimeInfo->HLSIdent != InHandle->HLSIdent)
 	{
 		// 重置运行信息
@@ -135,11 +135,11 @@ ULONG64 LhBarrierIntro(LOCAL_HOOK_INFO* InHandle, PVOID InRetAddr, PVOID* InAddr
 #else
 	RuntimeInfo->IsExecuting = IsProcessIntercepted(&InHandle->LocalACL, (ULONG)PsGetCurrentProcessId());
 #endif
-
+	// ACL拒绝执行
 	if (!RuntimeInfo->IsExecuting)
 		goto DONT_INTERCEPT;
 
-	// 保存特殊的信息
+	// 保存返回信息
 	RuntimeInfo->RetAddress = InRetAddr;
 	RuntimeInfo->AddrOfRetAddr = InAddrOfRetAddr;
 

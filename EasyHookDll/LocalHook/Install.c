@@ -310,7 +310,7 @@ EASYHOOK_NT_INTERNAL LhAllocateHook(PVOID InEntryPoint, PVOID InHookProc, PVOID 
 				*((PULONG32)Ptr) = (ULONG)LocalHookInfo->HookProc;
 				break;
 			}
-			case 0x1A2B3C06:	// UnmanagedOutro
+			case 0x1A2B3C06:	// BarrierOutro
 			{
 				*((PULONG32)Ptr) = (ULONG)LocalHookInfo->HookOutro;
 				break;

@@ -72,7 +72,7 @@ PVOID LhAllocateMemoryEx(PVOID InEntryPoint, PULONG OutPageSize)
 	// 32-bits/ driver  随便申请就可以 -E9 都可以跳到
 	*OutPageSize = PageSize;
 	Result = (PUCHAR)RtlAllocateMemory(TRUE, PageSize);
-	if (Result != NULL)
+	if (Result == NULL)
 	{
 		return NULL;
 	}

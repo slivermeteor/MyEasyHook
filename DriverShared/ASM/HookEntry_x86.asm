@@ -2,17 +2,14 @@
 .model flat, c
 .code
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;	
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; StealthStub_ASM_x86
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;StealthStub_ASM_x86
 public StealthStub_ASM_x86@0
-
 StealthStub_ASM_x86@0 PROC
 
-; Create thread...			启动目标远程线程
+; Create thread...	启动目标远程线程
 	push		0
 	push		0
-	push		dword ptr [ebx + 16]		; save stealth context
+	push		dword ptr [ebx + 16]		; 保存参数
 	push		dword ptr [ebx + 8]			; RemoteThreadStart
 	push		0
 	push		0
@@ -53,7 +50,7 @@ StealthStub_ASM_x86@0 PROC
 	add			esp, 4
 	popfd
 
-; continue execution...
+;   继续执行
 	jmp			dword ptr [esp - 8]	
 	
 ; outro signature, to automatically determine code size
@@ -63,39 +60,34 @@ StealthStub_ASM_x86@0 PROC
 	db 12h
 StealthStub_ASM_x86@0 ENDP
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;	
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; HookInjectionCode_ASM_x86
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;HookInjectionCode_ASM_x86
 public Injection_ASM_x86@0
 Injection_ASM_x86@0 PROC
-; no registers to save, because this is the thread main function
-; save first param (address of hook injection information)
 
-	mov esi, dword ptr [esp + 4]
+	mov esi, dword ptr [esp + 4]	; 保存第一参数
 	
-; call LoadLibraryW(Inject->EasyHookPath); 加载 EasyHookDll
+;   加载 EasyHookDll
 	push dword ptr [esi + 8]
-	
-	call dword ptr [esi + 40] ; LoadLibraryW@4
+	call dword ptr [esi + 40] ; call LoadLibraryW(Inject->EasyHookPath)
 	mov ebp, eax
 	test eax, eax
 	je HookInject_FAILURE_A
 	
-; call GetProcAddress(eax, Inject->EasyHookEntry); --- HookCompleteInjection 才是真正的Hook函数
+;   HookCompleteInjection 才是真正的Hook函数
 	push dword ptr [esi + 24]
 	push ebp
-	call dword ptr [esi + 56] ; GetProcAddress@8
+	call dword ptr [esi + 56] ; call GetProcAddress(eax, Inject->EasyHookEntry)
 	test eax, eax
 	je HookInject_FAILURE_B
 	
-; call EasyHookEntry(Inject);	HookCompleteion 这个函数里才会去加载真正要注入的Dll
+;	HookCompleteion 这个函数里才会去加载真正要注入的Dll
 	push esi
-	call eax
-	push eax ; save error code
+	call eax	; call EasyHookEntry(Inject)
+	push eax    ; 保存错误代码
 
-; call FreeLibrary(ebp)
+;   释放EasyHookDll
 	push ebp
-	call dword ptr [esi + 48] ; FreeLibrary@4
+	call dword ptr [esi + 48] ;  call FreeLibrary(ebp)
 	test eax, eax
 	je HookInject_FAILURE_C
 	jmp HookInject_EXIT
@@ -113,50 +105,51 @@ HookInject_FAILURE_C:
 	or eax, 30000000h
 	jmp HookInject_FAILURE_E	
 HookInject_FAILURE_E:
-	push eax ; save error value
+	push eax 				  ; 保存错误值 - 有效栈操作
 	
 HookInject_EXIT:
 
 	push 0
 	push 0
-	push 0; // shadow space for executable stack part...
-		  ; 开12个长度的栈区出来
-; call VirtualProtect(Outro, 4, PAGE_EXECUTE_READWRITE, &OldProtect)
-	; 为啥是 +8 第一个四字节 是原本的 EBP 第二个四字节是 函数的第一参数 RemoteInfo
-	lea ebx, dword ptr [esp + 8] ; we'll write to shadow space
+	push 0	; 开启栈区
+		    ; 开12个长度的栈区出来
+;   Parameters |  eip  |  eax  | Stack Shell Code... |
+;   n * 4 bit  | 4 bit | 4 bit |       12 bit        |
+;			   ↑call
+;   为啥是 +8 第一个四字节 是原本的 EBP 第二个四字节是 函数的第一参数 RemoteInfo
+	lea ebx, dword ptr [esp + 8] ; 借用栈空间存放下值
 	push ebx
 	push 40h
 	push 12
 	lea ebx, dword ptr [esp + 12] ; 越过上面三个参数 - 取得写入的首地址
 	push ebx
-	call dword ptr [esi + 72] ; VirtualProtect@16 让上面开的12字节长的栈区可以写
+	call dword ptr [esi + 72] ; ; call VirtualProtect(Outro, 4, PAGE_EXECUTE_READWRITE, &OldProtect)
 	test eax, eax
 	
 	jne HookInject_EXECUTABLE
 
-	; failed to make stack executable 失败 恢复栈区 返回
+;   失败 恢复栈区 返回
 		call dword ptr [esi + 88] ; GetLastError
 		or eax, 20000000h
 		add esp, 16
 		ret
 		
 HookInject_EXECUTABLE:
-; save outro to executable stack 往开的栈区里写代码
-	mov dword ptr [esp],	 0448BD3FFh		; call ebx [VirtualFree()]
+;  往开的栈区里写代码
+	mov dword ptr [esp],	 0448BD3FFh		; call ebx [VirtualFree()]	;   VirtualFree(Inject->RemoteEntryPoint, 0, MEM_RELEASE);
 	mov dword ptr [esp + 4], 05C8B0C24h		; mov eax, [esp + 12]
 	mov dword ptr [esp + 8], 0E3FF1024h		; mov ebx, [esp + 16]
 											; jmp ebx [exit thread]
 	
-; save params for VirtualFree(Inject->RemoteEntryPoint, 0, MEM_RELEASE);
 	mov ebx, [esi + 64] ; VirtualFree()
 	push 08000h
 	push 0
-	push dword ptr [esi + 16]	; 释放我们在RhInject 里在对方进程空间里申请的空间 也就是存放当前这段ShellCode的内存
+	push dword ptr [esi + 16]		; 释放我们在RhInject 里在对方进程空间里申请的空间 也就是存放当前这段ShellCode的内存
 	
 	lea eax, dword ptr [esp + 12]	; 回到三个push 开始的地方 开始执行
 	jmp eax							; 跳转到栈空间 让其释放掉当前这个ShellCode
 	
-; outro signature, to automatically determine code size
+;   标志位 计算asm函数大小			
 	db 78h
 	db 56h
 	db 34h
@@ -164,107 +157,110 @@ HookInject_EXECUTABLE:
 
 Injection_ASM_x86@0 ENDP
 
-;;;;;;;;;;;;;;;;;;;;; Trampoline_ASM_x86 ;;;;;;;;;;;;;;;;;;;;;
-
+;Trampoline_ASM_x86 
 public Trampoline_ASM_x86@0
-
 Trampoline_ASM_x86@0 PROC
-
 ; Handle:		1A2B3C05h
-; NETEntry:		1A2B3C03h
+; BarrierIntro: 1A2B3C03h
 ; OldProc:		1A2B3C01h
 ; NewProc:		1A2B3C00h
-; NETOutro:		1A2B3C06h
+; BarrierOutro:	1A2B3C06h
 ; IsExecuted:	1A2B3C02h
 ; RetAddr:		1A2B3C04h
 ; Ptr:NewProc:	1A2B3C07h
 
-	mov eax, esp
-	push ecx ; both are fastcall parameters, ECX is also used as "this"-pointer
+;   parameters |  eip  | ecx, edx | 
+;     n*4 bit  | 4 bit |   4 bit  | 
+
+	mov  eax, esp
+	push ecx 		; 保存参数(fastcall) -  ecx - this指针
 	push edx
-	mov ecx, eax; InitialRSP value for NETIntro()...
+	mov  ecx, eax	; 保存 esp 
 	
 	mov eax, 1A2B3C02h
-	db 0F0h ; interlocked increment execution counter
-	inc dword ptr [eax]
+	;db 0F0h 
+	lock inc dword ptr [eax]
 	
-; is a user handler available?
+;   Hook函数有效吗 ? 
 	mov eax, 1A2B3C07h
 	cmp dword ptr[eax], 0
 	
-	db 3Eh ; branch usually taken
+	db 3Eh 
 	jne CALL_NET_ENTRY
 	
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; call original method
+;   呼叫原函数
 		mov eax, 1A2B3C02h
-		db 0F0h ; interlocked decrement execution counter
-		dec dword ptr [eax]
+		;db 0F0h 
+		lock dec dword ptr [eax]
 		mov eax, 1A2B3C01h
 		jmp TRAMPOLINE_EXIT
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; call hook handler or original method...
+;   调用Hook函数 或者 原函数
 CALL_NET_ENTRY:	
-	
-; call NET intro
+;   call BarrierIntro
+;   parameters |  eip  | ecx, edx |  ecx  |
+;     n*4 bit  | 4 bit |   8 bit  | 4 bit |
+;			   ↑ 覆盖eip
 	push ecx
-	push dword ptr [esp + 12] ; push return address
-	push 1A2B3C05h ; Hook handle
+	push dword ptr [esp + 12] ; 压入返回地址
+	push 1A2B3C05h 			  ; Hook handle - 区别64位 直接传入地址
 	mov eax, 1A2B3C03h
-	call eax ; Hook->NETIntro(Hook, RetAddr);
+	call eax ; LocalHookInfo->BarrierIntro(Hook, RetAddr); x86 第三参数不传
 	
-; should call original method?
+;   可以call原函数吗? - ACL 决定
 	test eax, eax
-	
-	db 3Eh ; branch usually taken
+	db 3Eh ; 分支标志
 	jne CALL_HOOK_HANDLER
 	
-	; call original method
-		mov eax, 1A2B3C02h
-		db 0F0h ; interlocked decrement execution counter
-		dec dword ptr [eax]
-		mov eax, 1A2B3C01h
+	; 呼叫原函数
+		mov eax, 1A2B3C02h	; IsExecuted Address
+		;db 0F0h 
+		lock dec dword ptr [eax]
+		mov eax, 1A2B3C01h	; OldProc 放入原函数地址
 		jmp TRAMPOLINE_EXIT
 		
 CALL_HOOK_HANDLER:
-; adjust return address --- ATTENTION: this offset "83h" will also change if CALL_NET_OUTRO moves due to changes...
-	mov dword ptr [esp + 8], 1A2B3C04h
+; 调整返回地址 --- ATTENTION: this offset "83h" will also change if CALL_NET_OUTRO moves due to changes...
+	mov dword ptr [esp + 8], 1A2B3C04h	; 覆盖 eip 值
 
-; call hook handler
+; call Hook函数
 	mov eax, 1A2B3C00h
 	jmp TRAMPOLINE_EXIT 
 
-CALL_NET_OUTRO: ; this is where the handler returns...
-
-; call NET outro --- ATTENTION: Never change EAX/EDX from now on!
-	push 0 ; space for return address
-	push eax
-	push edx
+CALL_NET_OUTRO: ; Hook函数将返回这里
+; call BarrierOutro --- ATTENTION: Never change EAX/EDX from now on!
+; 重新开辟栈区
+;   parameters |  0  | eax edx |
+;     n*4 bit  | Ret |  8 bit  |
+	push 0 
+	push eax   ; 保存返回值
+	push edx   
 	
 	lea eax, [esp + 8]
-	push eax ; Param 2: Address of return address
-	push 1A2B3C05h ; Param 1: Hook handle
-	mov eax, 1A2B3C06h
-	call eax ; Hook->NETOutro(Hook);
+	push eax 		; 存放返回值 
+	push 1A2B3C05h  ; LocalHookInfo
+	mov eax, 1A2B3C06h ; BarrierOutro
+	call eax ; Hook->BarrierOutro(LocalHookInfo);
 	
 	mov eax, 1A2B3C02h
-	db 0F0h ; interlocked decrement execution counter
-	dec dword ptr [eax]
+	;db 0F0h 
+	lock dec dword ptr [eax]
 	
-	pop edx ; restore return value of user handler...
+	pop edx 
 	pop eax
 	
-; finally return to saved return address - the caller of this trampoline...
+;   返回最初call地址 结束Hook
 	ret
 	
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; generic outro for both cases...
 TRAMPOLINE_EXIT:
-
+;   parameters |  eip  | ecx, edx | 
+;     n*4 bit  | 4 bit |   8 bit  |
 	pop edx
 	pop ecx
 	
-	jmp eax ; ATTENTION: In case of hook handler we will return to CALL_NET_OUTRO, otherwise to the caller...
+	jmp eax ; 可能是 Hook 函数 或者 原函数
 	
-; outro signature, to automatically determine code size
+; 计算汇编函数长度
 	db 78h
 	db 56h
 	db 34h
