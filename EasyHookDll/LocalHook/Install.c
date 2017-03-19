@@ -107,7 +107,7 @@ EASYHOOK_NT_API LhInstallHook(PVOID InEntryPoint, PVOID InHookProc, PVOID InCall
 		RtlCopyMemory(&EntrySave, Jumper, 5);
 
 		// 备份原代码
-		LocalHookInfo->HookOldSave = EntrySave;
+		LocalHookInfo->HookSave = EntrySave;
 	}
 	*((ULONG64*)LocalHookInfo->TargetProc) = EntrySave;
 

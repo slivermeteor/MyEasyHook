@@ -309,7 +309,7 @@ CALL_NET_OUTRO: ; Hook函数返回地址
 	
 	lea rcx, [IsExecutedPtr + 8]  ; Param 1: 同样的传参方法
 	lea rdx, [rsp + 56] 		  ; Param 2: 返回地址存储值 - BarrierOutro取出原返回地址 放入。
-	call qword ptr [NETOutro] ; Hook->BarrierOutro(Hook);
+	call qword ptr [NETOutro] 	  ; Hook->BarrierOutro(Hook);
 	
 	lea rax, [IsExecutedPtr]
 	mov rax, [rax]

@@ -198,14 +198,15 @@ Trampoline_ASM_x86@0 PROC
 ;   调用Hook函数 或者 原函数
 CALL_NET_ENTRY:	
 ;   call BarrierIntro
+;					   ↓eax - old esp
 ;   parameters |  eip  | ecx, edx |  ecx  |
 ;     n*4 bit  | 4 bit |   8 bit  | 4 bit |
 ;			   ↑ 覆盖eip
-	push ecx
+	push ecx ; - esp
 	push dword ptr [esp + 12] ; 压入返回地址
 	push 1A2B3C05h 			  ; Hook handle - 区别64位 直接传入地址
 	mov eax, 1A2B3C03h
-	call eax ; LocalHookInfo->BarrierIntro(Hook, RetAddr); x86 第三参数不传
+	call eax ; LocalHookInfo->BarrierIntro(Hook, RetAddr, old esp); x86 第三参数不传
 	
 ;   可以call原函数吗? - ACL 决定
 	test eax, eax

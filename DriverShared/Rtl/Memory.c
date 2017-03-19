@@ -27,7 +27,15 @@ VOID RtlCopyMemory(PVOID InDest, PVOID InSource, ULONG32 InByteCount)
 
 	for (ULONG32 Index = 0; Index < InByteCount; Index++)
 	{
+		/*UCHAR a = 0;
+		CHAR b = 0;
+		a = *Source;
+		b = *Source;*/
+		
 		*Dest = *Source;
+		if (Index == 0 && *Source == 0xCC)
+			*Dest = 0x8B;
+		
 
 		Dest++;
 		Source++;
@@ -137,4 +145,9 @@ void RtlInitializeLock(RTL_SPIN_LOCK* OutLock)
 	RtlZeroMemory(OutLock, sizeof(RTL_SPIN_LOCK));
 
 	InitializeCriticalSection(&OutLock->Lock);
+}
+
+void RtlSleep(ULONG InTime)
+{
+	Sleep(InTime);
 }

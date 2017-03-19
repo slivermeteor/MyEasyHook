@@ -14,7 +14,7 @@
 typedef struct _HOOK_ACL_
 {
 	ULONG		    Count;
-	BOOL			IsExclusive;
+	BOOL			IsExclusive;			// 互斥 - FALSE 执行 TRUE 不执行
 	ULONG			Entries[MAX_ACE_COUNT];	// ACE - Access Control Entry
 }HOOK_ACL, *PHOOK_ACL;
 
@@ -28,7 +28,7 @@ typedef struct _LOCAL_HOOK_INFO_
 	PVOID			 TargetProc;		// 被Hook函数
 	ULONG64			 TargetBackup;	    // 目标备份函数
 	ULONG64		     TargetBackup_x64;  // X64-Driver使用
-	ULONG64			 HookOldSave;		// 保留Hook入口原代码
+	ULONG64			 HookSave;		// 保留Hook入口原代码
 	ULONG			 EntrySize;			// 入口指令长度 (>5
 	PVOID			 Trampoline;
 	ULONG			 HLSIndex;			// GlobalSlotList 注册索引
@@ -50,7 +50,10 @@ typedef struct _LOCAL_HOOK_INFO_
 }LOCAL_HOOK_INFO, *PLOCAL_HOOK_INFO;
 
 // Local Hook 全局变量
-extern RTL_SPIN_LOCK GlobalHookLock;
+extern RTL_SPIN_LOCK   GlobalHookLock;
+extern LOCAL_HOOK_INFO GlobalHookListHead;
+extern LOCAL_HOOK_INFO GlobalRemovalListHead;
+extern ULONG		   GlobalSlotList[];
 
 //EasyHookDll/LocalHook/reloc.c 内部函数 - udis86
 EASYHOOK_NT_INTERNAL LhRoundToNextInstruction(PVOID InCodePtr, ULONG InCodeSize, PULONG OutOffset);
@@ -71,7 +74,7 @@ EASYHOOK_BOOL_INTERNAL LhIsValidHandle(TRACED_HOOK_HANDLE InTracedHandle, PLOCAL
 void LhCriticalInitialize();
 
 // EasyHookDll/LocalHook/Barrier.c 内部函数
-ULONG64 LhBarrierIntro(LOCAL_HOOK_INFO* InHandle, PVOID InRetAddr, PVOID* InAddrOfRetAddr);
+ULONG64 _stdcall LhBarrierIntro(LOCAL_HOOK_INFO* InHandle, PVOID InRetAddr, PVOID* InAddrOfRetAddr);
 PVOID _stdcall LhBarrierOutro(PLOCAL_HOOK_INFO InHandle, PVOID* InAddrOfRetAddr);
 
 // EasyHookDll/LocalHook/Uninstall.c 

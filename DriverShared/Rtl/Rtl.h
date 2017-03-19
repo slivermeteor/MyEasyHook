@@ -66,5 +66,7 @@ void RtlDeleteLock(RTL_SPIN_LOCK* InLock);
 VOID RtlAcquireLock(PRTL_SPIN_LOCK InLock);
 VOID RtlReleaseLock(PRTL_SPIN_LOCK InLock);
 
+void RtlSleep(ULONG InTime);
+
 
 #endif

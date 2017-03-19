@@ -71,6 +71,13 @@ int main()
 			LhSetInclusiveACL(ACE, 1, &HookTraceInfo);
 
 			Test();
+
+			LhuninstallHook(&HookTraceInfo);
+
+			Test();
+
+			LhWaitForPendingRemovals();
+
 		}
 		else if (Index == 3)
 			break;
