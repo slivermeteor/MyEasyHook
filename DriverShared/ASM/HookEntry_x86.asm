@@ -160,6 +160,7 @@ Injection_ASM_x86@0 ENDP
 ;Trampoline_ASM_x86 
 public Trampoline_ASM_x86@0
 Trampoline_ASM_x86@0 PROC
+; Hook方修正地址值
 ; Handle:		1A2B3C05h
 ; BarrierIntro: 1A2B3C03h
 ; OldProc:		1A2B3C01h
@@ -173,12 +174,11 @@ Trampoline_ASM_x86@0 PROC
 ;     n*4 bit  | 4 bit |   4 bit  | 
 
 	mov  eax, esp
-	push ecx 		; 保存参数(fastcall) -  ecx - this指针
+	push ecx 		; 保存参数(x86 fastcall - ecx, edx) -  (x84 thiscall ecx)
 	push edx
 	mov  ecx, eax	; 保存 esp 
 	
 	mov eax, 1A2B3C02h
-	;db 0F0h 
 	lock inc dword ptr [eax]
 	
 ;   Hook函数有效吗 ? 

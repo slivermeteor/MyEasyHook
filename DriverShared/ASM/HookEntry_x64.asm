@@ -148,7 +148,7 @@ HookInject_EXECUTABLE:
 		; mov  rcx, r15
 		; call rbp
 		
-	mov qword ptr [rsp + 8], rax
+	mov qword ptr [rsp + 8], rax		; 放入栈区
 	
 ; save params for VirtualFree(Inject->RemoteEntryPoint, 0, MEM_RELEASE);
 	mov r8, 8000h
@@ -299,11 +299,11 @@ CALL_NET_OUTRO: ; Hook函数返回地址
 
 ; call BarrierOutro
 	push 0 ; 准备放返回地址
-	push rax
+	push rax	; 保存原本的返回值
 
-	sub rsp, 32 + 16; shadow space for method calls and SSE registers
+	sub rsp, 32 + 16; 参数栈区 和 XMM0 返回值的保存
 ; 注意在这里，已经调用了Hook函数。栈区已经发生了改变,原本所有的栈区已经被回收
-; Stack:| 0, rax | 	xmm0(浮点返回值)  |            |
+; Stack:| 0, rax | 	xmm0(浮点返回值) |            |
 ;       |  32bit |  16bit            |    32bit   |
 	movups [rsp + 32], xmm0
 	

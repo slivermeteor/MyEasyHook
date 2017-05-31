@@ -35,18 +35,18 @@ void	 LhBarrierProcessDetach();
 typedef struct _REMOTE_INFOR_
 {
 	// will be the same for all processes
-	WRAP_ULONG64(wchar_t* UserInjectLibrary);  // fixed 0
-	WRAP_ULONG64(wchar_t* EasyHookDllPath); // fixed 8
-	WRAP_ULONG64(wchar_t* EasyHookWorkPath);		 // fixed 16
-	WRAP_ULONG64(char* EasyHookEntryProcName);   // fixed 24
-	WRAP_ULONG64(void* RemoteEntryPoint); // fixed 32
-	WRAP_ULONG64(void* LoadLibraryW);	 // fixed; 40
-	WRAP_ULONG64(void* FreeLibrary);     // fixed; 48
-	WRAP_ULONG64(void* GetProcAddress);  // fixed; 56
-	WRAP_ULONG64(void* VirtualFree);	 // fixed; 64
-	WRAP_ULONG64(void* VirtualProtect);  // fixed; 72
-	WRAP_ULONG64(void* ExitThread);		 // fixed; 80
-	WRAP_ULONG64(void* GetLastError);    // fixed; 88
+	WRAP_ULONG64(wchar_t* UserInjectLibrary);		// fixed 0
+	WRAP_ULONG64(wchar_t* EasyHookDllPath);			// fixed 8
+	WRAP_ULONG64(wchar_t* EasyHookWorkPath);		// fixed 16
+	WRAP_ULONG64(char* EasyHookEntryProcName);		// fixed 24
+	WRAP_ULONG64(void* RemoteEntryPoint);			// fixed 32
+	WRAP_ULONG64(void* LoadLibraryW);				// fixed; 40
+	WRAP_ULONG64(void* FreeLibrary);				// fixed; 48
+	WRAP_ULONG64(void* GetProcAddress);				// fixed; 56
+	WRAP_ULONG64(void* VirtualFree);				// fixed; 64
+	WRAP_ULONG64(void* VirtualProtect);				// fixed; 72
+	WRAP_ULONG64(void* ExitThread);					// fixed; 80
+	WRAP_ULONG64(void* GetLastError);				// fixed; 88
 
 	BOOL            IsManaged;
 	HANDLE          RemoteSignalEvent;

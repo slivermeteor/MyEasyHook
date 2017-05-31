@@ -75,7 +75,8 @@ void LhCriticalInitialize();
 
 // EasyHookDll/LocalHook/Barrier.c ÄÚ²¿º¯Êý
 ULONG64 _stdcall LhBarrierIntro(LOCAL_HOOK_INFO* InHandle, PVOID InRetAddr, PVOID* InAddrOfRetAddr);
-PVOID _stdcall LhBarrierOutro(PLOCAL_HOOK_INFO InHandle, PVOID* InAddrOfRetAddr);
+PVOID   _stdcall LhBarrierOutro(PLOCAL_HOOK_INFO InHandle, PVOID* InAddrOfRetAddr);
+PHOOK_ACL LhBarrierGetACL();
 
 // EasyHookDll/LocalHook/Uninstall.c 
 void LhCriticalFinalize();

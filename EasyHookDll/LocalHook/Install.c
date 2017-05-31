@@ -101,7 +101,7 @@ EASYHOOK_NT_API LhInstallHook(PVOID InEntryPoint, PVOID InHookProc, PVOID InCall
 
 #else
 
-	// 保留原本的入口代码 - 5字节 真正的Hook
+	// 修改入口处代码 - 跳转到 Trampoline
 	EntrySave = *((ULONG64*)LocalHookInfo->TargetProc);
 	{
 		RtlCopyMemory(&EntrySave, Jumper, 5);

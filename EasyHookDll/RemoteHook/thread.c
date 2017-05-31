@@ -238,7 +238,7 @@ EASYHOOK_NT_API RhInjectLibrary(INT32 TargetProcessID, INT32 WakeUpThreadID, INT
 		THROW(STATUS_INTERNAL_ERROR, L"Unable to write into target process memory.");
 	}
 
-	// 启动远程线程
+	// 启动远程线程 - 选择方式
 	if ((InjectionOptions & EASYHOOK_INJECT_STEALTH) != 0)
 	{
 		FORCE(RhCreateStealthRemoteThread(TargetProcessID, (LPTHREAD_START_ROUTINE)RemoteShellCodeBase, CorrectRemoteInfo, &RemoteThreadHandle));

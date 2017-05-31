@@ -28,7 +28,7 @@ typedef struct _STEALTH_CONTEXT_
 	};
 
 	// register
-	ULONG64		Rax; // 0
+	ULONG64		Rax;   // 0
 	ULONG64		Rcx;
 	ULONG64		Rdx;
 	ULONG64		Rbp;
@@ -240,9 +240,9 @@ EASYHOOK_NT_API RhCreateStealthRemoteThread(ULONG32 InTargetProcessID, LPTHREAD_
 		THROW(STATUS_NO_MEMORY, L"Unable to allocate executable thread stack.");
 	}
 	RemoteContext = (PSTEALTH_CONTEXT)(LocalContext.Rsp - PAGE_SIZE * 19 - ContextSize);
-	//																	  |RemoteContext
-	//HighAddress                -19 * PAGE_SIZE|     -ContextSize-       |      |- 20 * PAGE_SIZE
-	//											|			--PAGE_SIZE--		 |
+	//															  |RemoteContext
+	//HighAddress                -19 * PAGE_SIZE|  -ContextSize-  | Actualy Use |- 20 * PAGE_SIZE
+	//											|			--PAGE_SIZE--		|
 #if !_M_X64
 	__pragma(warning(pop))
 #endif

@@ -36,15 +36,15 @@ int main()
 	
 
 			ULONG32 TargetProcessID = GetProcessIdByName(wzProcessName);
+			CHAR    szPassThruBuffer[] = "PassThruBuffer";
 
 #ifndef _WIN64
 			WCHAR wzInjectDllPath[MAX_PATH] = L"InjectDll32.dll";
-			NTSTATUS Status = RhInjectLibrary(TargetProcessID, 0, EASYHOOK_INJECT_STEALTH, wzInjectDllPath, NULL, NULL, 0);
+			NTSTATUS Status = RhInjectLibrary(TargetProcessID, 0, EASYHOOK_INJECT_STEALTH, wzInjectDllPath, NULL, szPassThruBuffer, strlen(szPassThruBuffer) + 1);
 #else
 			WCHAR wzInjectDllPath[MAX_PATH] = L"InjectDll64.dll";
-			NTSTATUS Status = RhInjectLibrary(TargetProcessID, 0, EASYHOOK_INJECT_STEALTH, NULL, wzInjectDllPath, NULL, 0);
+			NTSTATUS Status = RhInjectLibrary(TargetProcessID, 0, EASYHOOK_INJECT_STEALTH, NULL, wzInjectDllPath, szPassThruBuffer, strlen(szPassThruBuffer) + 1);
 #endif
-
 
 			if (Status != STATUS_SUCCESS)
 			{

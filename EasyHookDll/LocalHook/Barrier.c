@@ -108,7 +108,7 @@ ULONG64 _stdcall LhBarrierIntro(LOCAL_HOOK_INFO* InHandle, PVOID InRetAddr, PVOI
 			goto DONT_INTERCEPT;
 	}
 
-	// 得到Hook运行信息
+	// 根据Hook唯一ID 得到 线程对应这个钩子的RuntimeInfo
 	RuntimeInfo = &ThreadRuntimeInfo->Entries[InHandle->HLSIndex];	// HLSIndex - 在全局里注册的Index同时对应在BarrierUnit里的Entrise的Index
 	if (RuntimeInfo->HLSIdent != InHandle->HLSIdent)
 	{
@@ -366,6 +366,7 @@ void LhBarrierProcessDetach()
 PVOID _stdcall LhBarrierOutro(PLOCAL_HOOK_INFO InHandle, PVOID* InAddrOfRetAddr)
 {
 	// Outro 在实际Hook函数执行完成后 执行
+	// 关键解开 IsExecuting 锁
 	PRUNTIME_INFO Runtime = NULL;
 	PTHREAD_RUNTIME_INFO ThreadRuntimeInfo = NULL;
 
@@ -396,4 +397,9 @@ PVOID _stdcall LhBarrierOutro(PLOCAL_HOOK_INFO InHandle, PVOID* InAddrOfRetAddr)
 	ReleaseSelfProtection();
 
 	return InHandle;
+}
+
+PHOOK_ACL LhBarrierGetACL()
+{
+	return &BarrierUnit.GlobalACL;
 }

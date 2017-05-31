@@ -55,3 +55,8 @@ LONG LhSetACL(PHOOK_ACL InACL, BOOL InIsExclusive, PULONG InThreadIdList, LONG I
 
 	return STATUS_SUCCESS;
 }
+
+EASYHOOK_NT_API LhSetGlobalInclusiveACL(PULONG InThreadIdList, ULONG InThreadCount)
+{
+	return LhSetACL(LhBarrierGetACL(), FALSE, InThreadIdList, InThreadCount);
+}

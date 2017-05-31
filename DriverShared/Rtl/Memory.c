@@ -27,13 +27,9 @@ VOID RtlCopyMemory(PVOID InDest, PVOID InSource, ULONG32 InByteCount)
 
 	for (ULONG32 Index = 0; Index < InByteCount; Index++)
 	{
-		/*UCHAR a = 0;
-		CHAR b = 0;
-		a = *Source;
-		b = *Source;*/
-		
+
 		*Dest = *Source;
-		if (Index == 0 && *Source == 0xCC)
+		if (Index == 0 && *Source == 0xCC)	// VS Bug? 第一个字节取出来是 CC ?
 			*Dest = 0x8B;
 		
 
