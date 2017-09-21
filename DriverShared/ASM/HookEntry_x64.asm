@@ -2,10 +2,11 @@
 
 public StealthStub_ASM_x64
 StealthStub_ASM_x64 PROC
-	sub			rsp, 8 * 6  			    ; 栈区开够 - CreateThread 一共有6参 48肯定够
+	sub			rsp, 8 * 6  			    ; 栈区开够 - CreateThread 一共有6参 48肯定够 这里不需要加8 因为我们不需要返回 - 因为原本线程的栈区是平衡的
+											; 所以我们对栈区的修改肯定也必须是对齐的
 	
-	mov			qword ptr[rsp + 40], 0		; this code will cover the old stack data, we should sava it before call CreateThread
-	mov			qword ptr[rsp + 32], 0		; 这两步会覆盖原栈的值，我们需要提前保存值
+	mov			qword ptr[rsp + 40], 0		; 已经通过修改栈区代替
+	mov			qword ptr[rsp + 32], 0		; 
 	mov			r9, qword ptr [rbx + 16]	; RemoteThreadParam
 	mov			r8, qword ptr [rbx + 8]		; RemoteThreadStart
 	mov			rdx, 0
@@ -16,7 +17,7 @@ StealthStub_ASM_x64 PROC
 	; signal completion - 通知原函数 创建成功
 	mov			rcx, qword ptr [rbx + 48]	; 把SynchronEventHandle取出来	
 	mov			qword ptr [rbx + 48], rax	; 保存创建的远程线程句柄
-	call		qword ptr [rbx + 56]		; SetEvent(hSyncEvent);
+	call		qword ptr [rbx + 56]		; SetEvent(hSyncESynchronEventHandlevent);
 
 	; wait for completion 等待原函数Duplicate远程线程句柄
 	mov			rdx, -1
@@ -29,7 +30,7 @@ StealthStub_ASM_x64 PROC
 	
 	; close handle  
 	mov			rcx, qword ptr [rbx + 48]		
-	call		qword ptr [rbx + 40]		; CloseHandle(hSyncEvent);
+	call		qword ptr [rbx + 40]		; CloseHandle(SynchronEventHandle);
 	
 	; restore context 恢复 Context
 	mov			rax, [rbx + 64 + 8 * 0]
@@ -240,7 +241,7 @@ IsExecutedPtr:
 	movups [rsp + 1 * 16], xmm2
 	movups [rsp + 0 * 16], xmm3
 	
-	sub rsp, 32; 为子函数调用开辟栈区
+	sub rsp, 32; 为子函数调用开辟栈区 - 无论多少 最少四参数对齐
 ; Stack:| rcx, rdx, r8, r9 | xmm0, xmm1, xmm2, xmm3 | child functions parameters stack | rsp
 ;       |       32bit      |         64bit          |                32bit             |	
 	lea rax, [IsExecutedPtr]

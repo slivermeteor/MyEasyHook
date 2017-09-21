@@ -784,7 +784,7 @@ static DWORD InjectionSize = 0;
 #ifdef _M_X64
 	EXTERN_C VOID Injection_ASM_x64();
 #else
-EXTERN_C VOID __stdcall Injection_ASM_x86();
+	EXTERN_C VOID __stdcall Injection_ASM_x86();
 #endif
 
 BYTE* GetInjectionPtr()	// 得到ASM函数首地址

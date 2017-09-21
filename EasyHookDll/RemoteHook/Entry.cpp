@@ -91,7 +91,7 @@ EASYHOOK_NT_INTERNAL CompleteUnmanagedInjection(PREMOTE_INFOR RemoteInfo)
 
 	RemoteEntryProc(&RemoteEntryInfor);
 
-	// 是不是可以在这里释放 UserInjectLibrary ???
+	// 由 UserInjectLibrary 自己控制何时释放
 	return STATUS_SUCCESS;
 
 ABORT_ERROR:

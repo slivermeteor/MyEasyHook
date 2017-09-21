@@ -15,7 +15,6 @@ StealthStub_ASM_x86@0 PROC
 	push		0
 	call		dword ptr [ebx + 0]			; CreateThread(0, NULL, RemoteThreadStart, RemoteThreadParam, 0, NULL);
 	
-
 ; signal thread creation...	告诉注入方，远程线程已经启动
 	push		dword ptr [ebx + 48]		
 	mov			dword ptr [ebx + 48], eax	; 保存创建的远程线程句柄
@@ -64,7 +63,7 @@ StealthStub_ASM_x86@0 ENDP
 public Injection_ASM_x86@0
 Injection_ASM_x86@0 PROC
 
-	mov esi, dword ptr [esp + 4]	; 保存第一参数
+	mov esi, dword ptr [esp + 4]	; 保存第一参数 - Injection 根本就没开辟自己的栈区 所以现在 esp和ebp都还是调用样子
 	
 ;   加载 EasyHookDll
 	push dword ptr [esi + 8]
@@ -137,8 +136,8 @@ HookInject_EXIT:
 HookInject_EXECUTABLE:
 ;  往开的栈区里写代码
 	mov dword ptr [esp],	 0448BD3FFh		; call ebx [VirtualFree()]	;   VirtualFree(Inject->RemoteEntryPoint, 0, MEM_RELEASE);
-	mov dword ptr [esp + 4], 05C8B0C24h		; mov eax, [esp + 12]
-	mov dword ptr [esp + 8], 0E3FF1024h		; mov ebx, [esp + 16]
+	mov dword ptr [esp + 4], 05C8B0C24h		; mov eax, [esp + 12] - 恢复 HookEntry 的错误代码
+	mov dword ptr [esp + 8], 0E3FF1024h		; mov ebx, [esp + 16] -也就是原本的函数返回的 eip
 											; jmp ebx [exit thread]
 	
 	mov ebx, [esi + 64] ; VirtualFree()
@@ -146,8 +145,8 @@ HookInject_EXECUTABLE:
 	push 0
 	push dword ptr [esi + 16]		; 释放我们在RhInject 里在对方进程空间里申请的空间 也就是存放当前这段ShellCode的内存
 	
-	lea eax, dword ptr [esp + 12]	; 回到三个push 开始的地方 开始执行
-	jmp eax							; 跳转到栈空间 让其释放掉当前这个ShellCode
+	lea eax, dword ptr [esp + 12]	; 回到三个push 开始的地方 开始执行 - 注意这里esp已经指向了 VirtualFree 需要的参数起始地址
+	jmp eax							; 跳转到栈空间 让其释放掉当前这个ShellCode，并结束当前线程
 	
 ;   标志位 计算asm函数大小			
 	db 78h

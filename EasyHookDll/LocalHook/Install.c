@@ -148,7 +148,6 @@ EASYHOOK_NT_INTERNAL LhAllocateHook(PVOID InEntryPoint, PVOID InHookProc, PVOID 
 	PUCHAR   MemoryPtr = NULL;
 	LONG64   RelAddr = 0;
 	PLOCAL_HOOK_INFO LocalHookInfo = NULL;
-	
 
 #ifdef X64_DRIVER
 
@@ -216,7 +215,6 @@ EASYHOOK_NT_INTERNAL LhAllocateHook(PVOID InEntryPoint, PVOID InHookProc, PVOID 
 	跳板将会调用下面两个函数在用户定义的hook函数被调用前。
 	其中Intro判断ACL - 决定是否执行Hook函数
 	*/
-	// 未实现函数
 	LocalHookInfo->HookIntro = LhBarrierIntro;
 	LocalHookInfo->HookOutro = LhBarrierOutro;
 
@@ -242,7 +240,7 @@ EASYHOOK_NT_INTERNAL LhAllocateHook(PVOID InEntryPoint, PVOID InHookProc, PVOID 
 	// 确保空间还是足够 - RelocCode之后还要放跳回指令
 	// 因为如果入口函数不是一句跳转指令，只是一句正常的操作指令。那么我们在执行完成后，应该跳回原函数的下一句地址，继续正常执行。
 	MemoryPtr += (*RelocSize + MAX_JMP_SIZE);		// LOCAL_HOOK_INFO | TrampolineASM |  Old Proc |
-													//							       | EntrySize |↑ MemoryPtr
+													//							       | EntrySize ↑ MemoryPtr
 	LocalHookInfo->Size += (*RelocSize + MAX_JMP_SIZE);	// 留够足够空间
 
 	// 添加跳转代码到新的入口代码后面
@@ -263,12 +261,12 @@ EASYHOOK_NT_INTERNAL LhAllocateHook(PVOID InEntryPoint, PVOID InHookProc, PVOID 
 
 	// 写入跳转指令 
 	((PUCHAR)LocalHookInfo->OldProc)[*RelocSize] = 0xE9;
-
+	// 写入跳回的地址
 	RtlCopyMemory((PUCHAR)LocalHookInfo->OldProc + *RelocSize + 1, &RelAddr, 4);
 
 #endif
 
-	// 备份一份 被Hook函数入口的8字节
+	// 备份一份 被Hook函数入口的8字节 - 用来恢复
 	LocalHookInfo->TargetBackup = *((PULONG64)LocalHookInfo->TargetProc);
 
 #ifdef X64_DRIVER

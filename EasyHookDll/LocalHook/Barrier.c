@@ -276,7 +276,7 @@ BOOL IsProcessIntercepted(PHOOK_ACL LocalACL, ULONG InProcessID)
 		CheckID = InProcessID;
 #endif
 
-	// 全局ACL中是否有目标ID?
+	// 全局ACL中是否有目标ID? - 这里代码可以优化啊
 	// 在不在 GlobalACL 决定 最终执行的决定是跟随GlobalACL还是取反
 	if (ACLContains(&BarrierUnit.GlobalACL, CheckID))
 	{
@@ -294,8 +294,8 @@ BOOL IsProcessIntercepted(PHOOK_ACL LocalACL, ULONG InProcessID)
 		return !BarrierUnit.GlobalACL.IsExclusive;	// 在GlobalACL中
 												    // 1. 在LocalACL中，并且当前LocalACL执行Hook      
 											        // 2. 不在LocalACL中，并且当前LocalACL不执行Hook  
-		// 这说明 执行Hook,决定权   GlobalACL > LocalACL
-		//        不执行Hook,决定权  LocalACL > GlobalACL
+		// 这说明 执行Hook,决定权  LocalACL > GlobalACL 
+		
 	}
 	else
 	{
